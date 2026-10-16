@@ -168,3 +168,41 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 /* ---------- footer ---------- */
 .foot { padding: 26px 20px 40px; color: var(--dim); font-size: 13px; }
 .foot .dim { opacity: 0.75; }
+
+/* ============ CRT theme ============
+   When PixelQR runs inside the portfolio (or with ?crt=1) it wears the site's
+   glass: same phosphor palette, same terminal faces, square edges. On its own
+   it keeps the neutral look above — the theme is additive, not a rewrite. */
+@font-face { font-family: 'vt323'; src: url('assets/fonts/vt323-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'silkscreen'; src: url('assets/fonts/silkscreen-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+
+html.crt {
+  --bg: #0b0d0b;
+  --panel: #0e130d;
+  --panel-2: #101711;
+  --line: #223026;
+  --ink: #e4ebdf;
+  --dim: #93a38f;
+  --accent: #5df08a;
+  --accent-dim: #2f9e5b;
+  --bad: #ff9c7c;
+  --display: 'vt323', var(--mono);
+  --label: 'silkscreen', var(--mono);
+}
+html.crt body { font-family: var(--mono); }
+html.crt .top { padding: 14px 0 10px; }
+html.crt .top h1 {
+  font-family: var(--label); font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+html.crt .top h1 span { color: var(--accent); }
+html.crt .tagline { display: none; }        /* the site already frames it */
+html.crt .wrap { max-width: none; padding: 0 14px; }
+html.crt .layout { padding-top: 10px; gap: 14px; }
+html.crt .panel { border-radius: 0; }
+html.crt .panel-head h2 { font-family: var(--label); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+html.crt .panel-head .hint { font-family: var(--label); font-size: 9px; }
+html.crt .chip { border-radius: 0; font-family: var(--label); font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+html.crt .section-title, html.crt h3 { font-family: var(--display); }
+html.crt .canvas-frame { border-radius: 0; }
+html.crt canvas { image-rendering: pixelated; }
+html.crt .tools .group-label { font-family: var(--label); text-transform: uppercase; }

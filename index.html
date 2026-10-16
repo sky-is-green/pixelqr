@@ -181,6 +181,15 @@
   <p>PixelQR — an interactive for a portfolio near you. <span class="dim">Scan the avatar. Find the person.</span></p>
 </footer>
 
+<script>
+/* The portfolio frames this app on its own glass; wear the house theme there
+   (or with ?crt=1) without changing how it looks standing alone. */
+try {
+  var embedded = window.self !== window.top;
+  var asked = new URLSearchParams(location.search).get('crt');
+  if (embedded || asked === '1') document.documentElement.classList.add('crt');
+} catch (e) { document.documentElement.classList.add('crt'); }
+</script>
 <script src="lib/qrcode.js"></script>
 <script src="lib/jsQR.js"></script>
 <script src="core.js"></script>
