@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PixelQR — pixel art as a scannable QR code</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <h1>Pixel<span>QR</span></h1>
+    <p class="tagline">Paint pixel art. It becomes a real, scannable QR code — the art <em>is</em> the code.</p>
+  </div>
+</header>
+
+<main class="wrap layout">
+
+  <!-- ============ editor ============ -->
+  <section class="panel editor-panel">
+    <div class="panel-head">
+      <h2>Canvas</h2>
+      <span class="hint">drag to paint · right-click = erase · ctrl+z = undo</span>
+    </div>
+
+    <div class="canvas-frame">
+      <canvas id="editor"></canvas>
+    </div>
+
+    <div class="tools">
+      <div class="group" role="group" aria-label="Brush">
+        <span class="group-label">Brush</span>
+        <button class="chip brush active" data-brush="1" title="Paint ink">●&nbsp;ink</button>
+        <button class="chip brush" data-brush="0" title="Erase back to light">○&nbsp;erase</button>
+      </div>
+      <div class="group" role="group" aria-label="Style">
+        <span class="group-label">Style</span>
+        <button class="chip" data-style="square" title="Crisp square modules (classic)">▪&nbsp;square</button>
+        <button class="chip active" data-style="dots" title="Dots + ringed finders — calmest look, decode-verified">●&nbsp;dots</button>
+        <button class="chip" data-style="squircle" title="Soft-square superellipse tiles">squircle</button>
+        <button class="chip" data-style="hexagon" title="Honeycomb hexagon tiles + hexagon eyes">hexagon</button>
+        <button class="chip" data-style="leaf" title="Interlocking petal tiles + leaf-shaped eyes">leaf</button>
+        <button class="chip" data-style="diamond" title="Diagonal diamond lattice">◆&nbsp;diamond</button>
+      </div>
+      <div class="group">
+        <span class="group-label">Presets</span>
+        <button class="chip" data-preset="CAT">cat</button>
+        <button class="chip" data-preset="SMILEY">smiley</button>
+        <button class="chip" data-preset="HEART">heart</button>
+      </div>
+      <div class="group">
+        <span class="group-label">Image</span>
+        <button class="chip" id="upload">upload&nbsp;image</button>
+        <button class="chip" id="clear">clear</button>
+        <button class="chip" id="undo">undo</button>
+        <input type="file" id="file" accept="image/*" hidden>
+      </div>
+    </div>
+
+    <p class="legend">
+      The dashed outline is your <b>writable canvas</b> — everything inside is guaranteed clean:
+      no random code cells, what you paint is what scans. The faint-diagonal ring around it is the
+      QR's own machine zone (plus the fixed finder/timing skeleton): the code's randomness lives
+      there, never inside your canvas. Red dots mark ink that didn't fit — switch to a higher
+      version for a bigger canvas, or erase it.
+    </p>
+  </section>
+
+  <!-- ============ preview ============ -->
+  <section class="panel preview-panel">
+    <div class="panel-head">
+      <h2>Your QR</h2>
+    </div>
+
+    <div class="canvas-frame preview-frame">
+      <canvas id="preview"></canvas>
+    </div>
+
+    <div id="badge" class="badge"></div>
+    <div id="badge-detail" class="detail"></div>
+    <div id="stats" class="stats"></div>
+
+    <div class="settings">
+      <label class="field">
+        <span>Links to</span>
+        <input id="url" type="url" value="https://USER.github.io" spellcheck="false">
+      </label>
+
+      <div class="row">
+        <label class="field small">
+          <span>Version</span>
+          <select id="version">
+            <option value="2">v2 · 25×25</option>
+            <option value="3">v3 · 29×29</option>
+            <option value="4" selected>v4 · 33×33</option>
+            <option value="5">v5 · 37×37</option>
+            <option value="6">v6 · 41×41</option>
+          </select>
+        </label>
+
+        <label class="field small">
+          <span>Mask</span>
+          <select id="mask">
+            <option value="auto" selected>auto</option>
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+          </select>
+        </label>
+
+        <button class="chip" id="shuffle-mask" title="Try a random mask">↻&nbsp;shuffle</button>
+      </div>
+    </div>
+
+    <div class="downloads">
+      <button class="chip dl" id="dl-qr">PNG</button>
+      <button class="chip dl" id="dl-svg">SVG</button>
+      <button class="chip dl" id="dl-avatar">Avatar 1024</button>
+      <button class="chip dl" id="dl-avatar-preview">Avatar preview</button>
+    </div>
+  </section>
+</main>
+
+<section class="wrap">
+  <details class="howto">
+    <summary>How does this work?</summary>
+    <div class="howto-body">
+      <p>
+        A QR code at <b>error-correction level H</b> is built to survive up to ~30% damage — that
+        tolerance is a budget, and PixelQR spends it to make one region of the code <b>fully
+        yours</b>: a writable canvas where every cell is pinned to your drawing (ink dark,
+        background light). The code's own random cells are pushed outside the canvas into the
+        ring — they're what keeps every link unique, and they never mix with your art. What you
+        paint is what scans.
+      </p>
+      <ul>
+        <li><b>Writable canvas</b> (dashed outline) — a rounded-square region sized from the
+        available code budget, guaranteed to end up <b>100% free of random code cells</b>.
+        Bigger versions buy a bigger canvas (v3 ≈ 13×13 cells, v4 ≈ 17×17, v5 ≈ 19×19, v6 ≈ 23×23
+        for this link length; a shorter link buys more). If a pattern is stubborn, the canvas
+        steps one cell smaller until the guarantee holds — it never shows noise.</li>
+        <li><b>The code ring</b> — everything outside the canvas (faint diagonal) is the QR's
+        machine zone: finder patterns, timing, and the random data cells carrying your link plus
+        the digital signatures that make it decode. Its randomness is what makes the code unique.</li>
+        <li><b>Free payload bits</b> — the pad codewords after the payload terminator are never
+        read by decoders. The app solves them with linear algebra (same family of trick as
+        QArt/QArtText codes) to pin another batch of canvas cells <i>exactly</i> — 16 free bits at
+        v3, 96 at v4, 176 at v5 — spending no scan margin at all.</li>
+        <li><b>Styled rendering</b> — dots or rounded tiles with rounded finders, the look
+        commercial design-QR generators use to calm the noise down. Every style is verified by
+        decoding the styled render itself (crisp and blurred), so the pretty version is the
+        scannable version.</li>
+        <li><b>Sacrificed codewords</b> — every 8 module bits form one codeword. Flipping the
+        codeword's bits costs the decoder only <i>one</i> error, so each sacrificed codeword pins
+        a whole batch of canvas cells.</li>
+        <li><b>Pattern-fit search</b> — the popup pattern is determined by the link and the mask.
+        The app quietly tries variant encodings and all 8 masks, then keeps the one whose free
+        cells fit your drawing best (the tiny <code>#x</code> fragment it may add to your link
+        only changes the anchor, not the page).</li>
+        <li><b>Live verification</b> — after every edit, the code is decoded in your browser with
+        a real QR decoder (jsQR), both crisp and blurred/shrunk to simulate scanning at a
+        distance. If it fails, the flip budget is auto-trimmed until it passes.</li>
+        <li><b>Red dots</b> in the canvas mark ink that didn't fit the budget — that's your cue
+        to switch to a higher version (bigger canvas) or simplify that area.</li>
+      </ul>
+      <p class="fine">
+        Everything runs in your browser — no server, no uploads. Built on
+        qrcode-generator (MIT) and jsQR (Apache-2.0). Point your phone's camera at the preview to scan it.
+      </p>
+    </div>
+  </details>
+</section>
+
+<footer class="wrap foot">
+  <p>PixelQR — an interactive for a portfolio near you. <span class="dim">Scan the avatar. Find the person.</span></p>
+</footer>
+
+<script src="lib/qrcode.js"></script>
+<script src="lib/jsQR.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
