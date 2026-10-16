@@ -203,6 +203,12 @@ html.crt .layout {
 html.crt .panel { padding: 10px; }
 html.crt .panel-head { margin-bottom: 8px; }
 html.crt .canvas-frame { margin-bottom: 10px; }
+/* The canvases are sized in JS to their backing store (a cell grid), so they
+   have an intrinsic pixel width that becomes the panel's min width — which is
+   what pushed a horizontal scrollbar into the frame. They scale instead, and
+   cellFromEvent() is already scale-aware. */
+html.crt .canvas-frame canvas { max-width: 100%; height: auto; }
+html.crt .panel, html.crt .layout, html.crt .panel-head { min-width: 0; }
 html.crt .tools { margin-top: 10px; gap: 7px; }
 html.crt .settings { margin-top: 10px; }
 html.crt .panel { border-radius: 0; }
