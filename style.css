@@ -190,14 +190,21 @@ html.crt {
   --label: 'silkscreen', var(--mono);
 }
 html.crt body { font-family: var(--mono); }
-html.crt .top { padding: 14px 0 10px; }
-html.crt .top h1 {
-  font-family: var(--label); font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase;
+html.crt .top { display: none; }            /* the site already frames and names it */
+html.crt .wrap { max-width: none; padding: 0 12px; }
+/* Editor and preview stay side by side: this app is framed at ~500px wide, so
+   the usual 880px collapse would stack them and make the frame scroll. It only
+   stacks when the frame itself is genuinely too narrow for two columns. */
+html.crt .layout {
+  padding: 10px 0 12px; gap: 12px;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
 }
-html.crt .top h1 span { color: var(--accent); }
-html.crt .tagline { display: none; }        /* the site already frames it */
-html.crt .wrap { max-width: none; padding: 0 14px; }
-html.crt .layout { padding-top: 10px; gap: 14px; }
+@media (max-width: 400px) { html.crt .layout { grid-template-columns: 1fr; } }
+html.crt .panel { padding: 10px; }
+html.crt .panel-head { margin-bottom: 8px; }
+html.crt .canvas-frame { margin-bottom: 10px; }
+html.crt .tools { margin-top: 10px; gap: 7px; }
+html.crt .settings { margin-top: 10px; }
 html.crt .panel { border-radius: 0; }
 html.crt .panel-head h2 { font-family: var(--label); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
 html.crt .panel-head .hint { font-family: var(--label); font-size: 9px; }
