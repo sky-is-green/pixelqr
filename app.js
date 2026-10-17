@@ -10,12 +10,12 @@
   var PREVIEW_BOX = 12;   // preview module size (px)
 
   var state = {
-    version: 4,                              // default: canvas big enough for the cat preset
+    version: 6,                              // default: the biggest canvas, most room to draw
     mask: 'auto',
     brush: 1,                                // 1 = ink, 0 = erase
     style: 'dots',                           // render style: square | rounded | dots
     url: 'https://USER.github.io',
-    artRows: reframeRows(P.TEMPLATE_ROWS.CAT, 33),
+    artRows: reframeRows(P.TEMPLATE_ROWS.CAT, 6 * 4 + 17),  // v6 canvas (n = version * 4 + 17)
     result: null,
     error: null
   };
