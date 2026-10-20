@@ -192,6 +192,17 @@ The folder is fully static. Either
 
 No external requests at runtime. The app is themeable via `style.css`.
 
+**Bump `?v=` when the app changes.** `index.html` loads `style.css`, `core.js`
+and `app.js` with a version query. The app's files change together, and a
+browser that kept the old `core.js` in its cache while fetching the new
+`app.js` gets a mix that cannot work — the old engine does not have what the
+new app asks of it. The query string makes the browser fetch all of them
+afresh, as a set. The app also survives such a mix: the boot wires the
+drawing and the controls first and treats the version labels and the note as
+niceties, so a failure there cannot stop the code from being built — and the
+drawing is painted before the fit, so a slow first fit looks like work rather
+than like a broken page.
+
 ## Files
 
 ```

@@ -353,12 +353,12 @@
       state.error = (typeof e === 'string') ? e : (e && e.message) || 'QR build failed';
     }
     if (labelKey !== state.url + '|' + state.pipeline + '|' + state.surface) {
-      updateVersionLabels();
+      try { updateVersionLabels(); } catch (e) { /* the labels are a nicety */ }
       labelKey = state.url + '|' + state.pipeline + '|' + state.surface;
     }
-    drawEditor();
-    drawPreview();
-    updateStatus();
+    try { drawEditor(); } catch (e) { /* keep the rest alive */ }
+    try { drawPreview(); } catch (e) { /* keep the rest alive */ }
+    try { updateStatus(); } catch (e) { /* keep the rest alive */ }
   }
 
   // ---------------- editor ----------------
@@ -833,13 +833,30 @@
 
   // ---------------- boot ----------------
 
+  /**
+   * Boot.
+   *
+   * The order matters: the drawing and the handlers come first, so that a
+   * failure anywhere else still leaves a working app (you can paint, and the
+   * paint recomputes the code). The drawing is painted before the fit — the
+   * fit takes a moment, and an empty canvas reads as a page that failed to
+   * load rather than one that is still working.
+   */
   function boot() {
     state.artRows = reframeRows(P.TEMPLATE_ROWS.CAT, n());
     wireEditor();
     wireControls();
-    updateVersionLabels();
-    updateHint();
-    refresh(true);
+    try { updateVersionLabels(); } catch (e) { /* the labels are a nicety */ }
+    try { updateHint(); } catch (e) { /* so is the note */ }
+    try {
+      drawEditor();
+      var badge = $('#badge');
+      badge.className = 'badge';
+      badge.textContent = '… working';
+      var preview = $('#preview');
+      preview.width = preview.height = (n() + 8) * PREVIEW_BOX;
+    } catch (e) { /* keep going: the fit is what matters */ }
+    setTimeout(function () { refresh(true); }, 0);
   }
 
   boot();
