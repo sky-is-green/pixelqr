@@ -5,9 +5,10 @@ Paint pixel art. It becomes a **real, scannable QR code**: the art *is* the code
 
 Live at: https://sky-is-green.github.io/pixelqr/
 
-<img width="250" height="250" alt="1024_cut" src="https://github.com/user-attachments/assets/60c2c521-41e9-4ad8-be53-344b966201c4" /> 
-<img width="250" height="250" alt="avatar_1024(2)" src="https://github.com/user-attachments/assets/2575c420-10ee-45d4-885e-e760ad3050ea" />
-<img width="250" height="250" alt="pixelqr(3)" src="https://github.com/user-attachments/assets/8aa5e274-85a3-4502-ac36-344a3fc34c0b" />
+<img width="250" height="250" alt="The custom layout: a round QR, full-bleed, the eyes 120 degrees apart" src="assets/avatars/avatar_custom_heart.png" />
+<img width="250" height="250" alt="The standard layout: an ordinary QR, which any phone camera reads" src="assets/avatars/avatar_standard.png" />
+<img width="250" height="250" alt="The custom layout with the cat" src="assets/avatars/avatar_custom.png" />
+<img width="250" height="250" alt="The round profile picture: the QR inscribed in the circle, so all three eyes survive the crop" src="assets/avatars/avatar_round.png" />
 
 
 No server, no build step, no CDN: everything runs in the browser, works from
