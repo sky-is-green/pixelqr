@@ -3,7 +3,8 @@
 
 Paint pixel art. It becomes a **real, scannable QR code**: the art *is* the code. Live at: https://sky-is-green.github.io/pixelqr/
 
-<img width="460" height="460" alt="1024_cut" src="https://github.com/user-attachments/assets/60c2c521-41e9-4ad8-be53-344b966201c4" />
+<img width="460" height="460" alt="1024_cut" src="https://github.com/user-attachments/assets/60c2c521-41e9-4ad8-be53-344b966201c4" /> <img width="460" height="460" alt="avatar_1024(2)" src="https://github.com/user-attachments/assets/2575c420-10ee-45d4-885e-e760ad3050ea" />
+
 
 No server, no build step, no CDN: everything runs in the browser, works from
 `file://`, and can be embedded in your website (see below).
