@@ -106,7 +106,7 @@ budget, and PixelQR spends it to carve out one region of the code that becomes
    floor): the two never trade off. Painting is restricted to the surface;
    the ring is code.
 2. **Surface sizing from the budget**: the unit of error correction is the
-   **codeword**: eight modules along the placement walk. A codeword may be
+   **codeword**, eight modules along the placement walk. A codeword may be
    sacrificed once per RS block, and the placement walk hands codewords out in
    runs, so the surface's codewords are *not* spread evenly over the blocks:
    the tightest block decides how big the surface can be. The estimate uses
