@@ -14,8 +14,9 @@
   'use strict';
 
   var P = window.PixelQR;
-  var CELL = 16;          // editor cell size (px)
+  var BASE_CELL = 16;     // editor cell size at 1x (px)
   var PREVIEW_BOX = 12;   // preview module size (px)
+  var ZOOMS = [1, 2, 3, 4];
 
   // The versions on offer, per generation. The standard one keeps to the
   // versions that have no alignment pattern in the drawing area (v3 to v6),
@@ -32,6 +33,7 @@
     brush: 1,                                // 1 = ink, 0 = erase
     style: 'dots',                           // render style: square | rounded | dots
     surface: 'squircle',                     // the shape of the free area
+    zoom: 1,                                 // the editor's zoom: bigger cells, finer detail
     url: 'https://USER.github.io',
     artRows: null,                           // set on boot, once the grid size is known
     result: null,
@@ -46,6 +48,9 @@
 
   function $(sel) { return document.querySelector(sel); }
   function pipe() { return P.PIPELINES[state.pipeline] || P.PIPELINES.standard; }
+
+  /** The editor's cell size: the base cell, scaled by the zoom. */
+  function cell() { return BASE_CELL * state.zoom; }
 
   /** The editor grid: a square for the standard pipeline, a disc's box for mine. */
   function n() {
@@ -410,6 +415,7 @@
   function drawEditor() {
     var canvasEl = $('#editor');
     var size = n();
+    var CELL = cell();
     canvasEl.width = canvasEl.height = size * CELL + 1;
     var ctx = canvasEl.getContext('2d');
     ctx.fillStyle = '#14141b';
@@ -528,6 +534,7 @@
 
   function cellFromEvent(evt) {
     var rect = $('#editor').getBoundingClientRect();
+    var CELL = cell();
     var scale = (n() * CELL + 1) / rect.width;
     var x = Math.floor(((evt.clientX - rect.left) * scale) / CELL);
     var y = Math.floor(((evt.clientY - rect.top) * scale) / CELL);
@@ -561,7 +568,7 @@
       if (e.button === 2) return;
       pushUndo();
       painting = true;
-      canvas.setPointerCapture(e.pointerId);
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* not fatal */ }
       applyBrush(e);
     });
     canvas.addEventListener('pointermove', function (e) { if (painting) applyBrush(e); });
@@ -740,6 +747,48 @@
       refresh(true);
     });
 
+    // The zoom: bigger cells for finer detail. The grid is redrawn at the
+    // new cell size (so it stays crisp) and the frame scrolls when it
+    // outgrows the panel — keeping the same cell in the middle, so zooming
+    // in does not throw away what you were looking at.
+    function setZoom(z) {
+      var next = Math.min(Math.max(1, z), ZOOMS[ZOOMS.length - 1]);
+      if (next === state.zoom) return;
+      var frame = $('.editor-frame');
+      var canvas = $('#editor');
+      var before = null;
+      if (frame && canvas) {
+        var fr = frame.getBoundingClientRect();
+        var cr = canvas.getBoundingClientRect();
+        if (cr.width && fr.width) {
+          before = {
+            x: (fr.left + fr.width / 2 - cr.left) / cr.width,
+            y: (fr.top + fr.height / 2 - cr.top) / cr.height
+          };
+        }
+      }
+      state.zoom = next;
+      $('#zoom-level').textContent = state.zoom + '×';
+      $('#zoom-out').disabled = state.zoom === ZOOMS[0];
+      $('#zoom-in').disabled = state.zoom === ZOOMS[ZOOMS.length - 1];
+      drawEditor();
+      if (before && frame && canvas) {
+        var fr2 = frame.getBoundingClientRect();
+        var cr2 = canvas.getBoundingClientRect();
+        frame.scrollLeft += (cr2.left + before.x * cr2.width) - (fr2.left + fr2.width / 2);
+        frame.scrollTop += (cr2.top + before.y * cr2.height) - (fr2.top + fr2.height / 2);
+      }
+    }
+
+    $('#zoom-in').addEventListener('click', function () { setZoom(state.zoom + 1); });
+    $('#zoom-out').addEventListener('click', function () { setZoom(state.zoom - 1); });
+    // ctrl+wheel zooms too, for a mouse that is already there
+    $('#editor').addEventListener('wheel', function (e) {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoom(state.zoom + (e.deltaY < 0 ? 1 : -1));
+    }, { passive: false });
+
     Array.prototype.forEach.call(document.querySelectorAll('[data-brush]'), function (btn) {
       btn.addEventListener('click', function () {
         state.brush = parseInt(btn.getAttribute('data-brush'), 10);
@@ -904,6 +953,9 @@
       badge.textContent = '… working';
       var preview = $('#preview');
       preview.width = preview.height = (n() + 8) * PREVIEW_BOX;
+      $('#zoom-level').textContent = state.zoom + '×';
+      $('#zoom-out').disabled = state.zoom === ZOOMS[0];
+      $('#zoom-in').disabled = state.zoom === ZOOMS[ZOOMS.length - 1];
     } catch (e) { /* keep going: the fit is what matters */ }
     setTimeout(function () { refresh(true); }, 0);
   }

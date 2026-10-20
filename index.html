@@ -7,7 +7,7 @@
 <!-- The app's own files carry a version: they change together, and a browser
      that cached the old core.js with the new app.js would break. Bump ?v= when
      the app changes. -->
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -25,10 +25,17 @@
   <section class="panel editor-panel">
     <div class="panel-head">
       <h2>Canvas</h2>
-      <span class="hint">drag to paint · right-click = erase · ctrl+z = undo</span>
+      <div class="head-tools">
+        <span class="hint">drag to paint · right-click = erase · ctrl+z = undo</span>
+        <div class="zoom" role="group" aria-label="Zoom">
+          <button class="chip zoom-btn" id="zoom-out" title="Zoom out — smaller cells">−</button>
+          <span class="zoom-level" id="zoom-level">1×</span>
+          <button class="chip zoom-btn" id="zoom-in" title="Zoom in — finer detail">+</button>
+        </div>
+      </div>
     </div>
 
-    <div class="canvas-frame">
+    <div class="canvas-frame editor-frame">
       <canvas id="editor"></canvas>
     </div>
 
@@ -224,9 +231,9 @@ try {
   if (embedded || asked === '1') document.documentElement.classList.add('crt');
 } catch (e) { document.documentElement.classList.add('crt'); }
 </script>
-<script src="lib/qrcode.js?v=3"></script>
-<script src="lib/jsQR.js?v=3"></script>
-<script src="core.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="lib/qrcode.js?v=4"></script>
+<script src="lib/jsQR.js?v=4"></script>
+<script src="core.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

@@ -23,7 +23,7 @@ html, body {
   line-height: 1.5;
 }
 
-.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
 
 /* ---------- header ---------- */
 .top { padding: 34px 0 10px; }
@@ -40,7 +40,7 @@ html, body {
 /* ---------- layout ---------- */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
   gap: 24px;
   padding-top: 24px;
   padding-bottom: 24px;
@@ -66,6 +66,19 @@ html, body {
 }
 .panel-head h2 { margin: 0; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
 .hint { color: var(--dim); font-size: 12px; }
+.head-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* the zoom: bigger cells for finer detail, and a frame that scrolls when the
+   grid outgrows it */
+.zoom { display: flex; align-items: center; gap: 4px; }
+.zoom-btn { padding: 3px 10px; font-size: 14px; line-height: 1.2; }
+.zoom-level {
+  min-width: 34px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
 
 .canvas-frame {
   background: #0a0a0f;
@@ -75,7 +88,8 @@ html, body {
   display: flex;
   justify-content: center;
 }
-#editor { cursor: crosshair; touch-action: none; max-width: 100%; height: auto; image-rendering: pixelated; }
+.editor-frame { overflow: auto; max-height: 76vh; justify-content: flex-start; }
+#editor { cursor: crosshair; touch-action: none; max-width: none; height: auto; image-rendering: pixelated; margin: auto; }
 .preview-frame { background: #fff; }
 #preview { max-width: 100%; height: auto; image-rendering: pixelated; }
 

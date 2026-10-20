@@ -64,6 +64,10 @@ node test/pipeline.js
   verified by decoding the styled render itself.
 - **Red dots** mark drawn ink the budget couldn't realize: switch to a higher
   version (bigger surface) or erase that bit.
+- **A roomy editor and a zoom.** The drawing grid gets the wider column and
+  most of the page, and the zoom (1× to 4×, or ctrl+wheel) makes the cells
+  bigger for fine detail — redrawn at the new size rather than scaled, so it
+  stays crisp, and the view keeps the same cell in the middle.
 - **Undo** (Ctrl/Cmd+Z or the button) steps back through edits.
 - **Live verification**: after every edit the code is decoded in-browser with a
   real QR decoder (jsQR), both crisp and shrunk+blurred (simulating scanning at
@@ -178,6 +182,7 @@ and changes one thing: **the layout**.
 | Upload image | Downsample any image to the grid (dark/light threshold) |
 | Clear | Wipe every drawing — the surface goes back to blank (undo brings it back) |
 | Undo | Ctrl/Cmd+Z or the button — steps back through edits |
+| Zoom: − / 1× / + | Bigger cells for finer detail (also ctrl+wheel). The grid is redrawn at the new cell size, so it stays crisp, and the frame scrolls when it outgrows the panel — the same cell stays in the middle |
 | Link to → | The URL the QR encodes |
 | Version | v3–v13 = 29–69 modules; each shows the surface it would give this link, and the ones that cannot hold the link are greyed out (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
 | Mask | auto / 0–7 / shuffle — auto runs the pattern-fit search (may add a `#x` anchor fragment to the link); a fixed mask keeps your exact link |
