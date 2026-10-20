@@ -206,7 +206,7 @@
         '(the custom mode has none).');
     }
     if (state.surface === 'cross') {
-      bits.push('A cross is thin — its arms only have room to draw in at v12, ' +
+      bits.push('A cross is thin: its arms only have room to draw in at v12, ' +
         'so that is the only version on offer.');
     }
     hint.textContent = bits.join(' ');

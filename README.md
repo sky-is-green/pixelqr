@@ -177,7 +177,7 @@ and changes one thing: **the layout**.
 |---|---|
 | Generation: standard / custom | The ordinary QR, or my own circular layout |
 | Brush: ink / erase | Paint a module dark, or back to light (right-click erases too) |
-| Surface: square / circle / cross | The shape of the free area (a cross is thin — only v12 has room to draw in it) |
+| Surface: square / circle / cross | The shape of the free area (a cross is thin: only v12 has room to draw in it) |
 | Style: square / dots / squircle / hexagon / leaf / diamond | How the final code is rendered: every style is decode-verified as rendered (crisp, blurred, downscaled) |
 | Presets: cat / smiley / heart | Load a module-resolution template |
 | Upload image | Downsample any image to the grid (dark/light threshold) |
