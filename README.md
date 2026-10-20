@@ -5,9 +5,7 @@ Paint pixel art. It becomes a **real, scannable QR code**: the art *is* the code
 
 Live at: https://sky-is-green.github.io/pixelqr/
 
-<img width="250" height="250" alt="The custom layout: a round QR, full-bleed, the eyes 120 degrees apart" src="assets/avatars/avatar_custom_heart.png" />
-<img width="250" height="250" alt="The standard layout: an ordinary QR, which any phone camera reads" src="assets/avatars/avatar_standard.png" />
-<img width="250" height="250" alt="1024_cut" src="https://github.com/user-attachments/assets/029abf68-104e-4682-8d09-8cc5cba93b8f" />
+<img width="250" height="250" alt="The custom layout: a round QR, full-bleed, the eyes 120 degrees apart" src="assets/avatars/avatar_custom_heart.png" /><img width="250" height="250" alt="The standard layout: an ordinary QR, which any phone camera reads" src="assets/avatars/avatar_standard.png" /><img width="250" height="250" alt="1024_cut" src="https://github.com/user-attachments/assets/029abf68-104e-4682-8d09-8cc5cba93b8f" />
 
 
 
