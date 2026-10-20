@@ -1,7 +1,7 @@
 
 # PixelQR
 
-Paint pixel art. It becomes a **real, scannable QR code**: the art *is* the code.
+Paint pixel art. It becomes a **real, scannable QR code**: the art *is* the code. Live at: https://sky-is-green.github.io/pixelqr/
 
 <img width="460" height="460" alt="1024_cut" src="https://github.com/user-attachments/assets/60c2c521-41e9-4ad8-be53-344b966201c4" />
 
