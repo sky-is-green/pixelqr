@@ -38,6 +38,31 @@
   // Remainder bits per version (spec) — free art cells.
   var REMAINDER_BITS = { 1: 0, 2: 7, 3: 7, 4: 7, 5: 7, 6: 7 };
 
+  // Versions the engine supports. v7+ brings the multi-alignment-pattern
+  // layout and the 18-bit version-information blocks; from v7 the error
+  // budget roughly doubles per step, so the writable surface grows a lot.
+  var MIN_VERSION = 2;
+  var MAX_VERSION = 13;
+
+  // Alignment-pattern centre rows/cols per version (ISO/IEC 18004 table).
+  // The three combinations that would collide with a finder are skipped.
+  var ALIGN_POS = {
+    1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34],
+    7: [6, 22, 38], 8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50],
+    11: [6, 30, 54], 12: [6, 32, 58], 13: [6, 34, 62],
+    14: [6, 26, 46, 66], 15: [6, 26, 48, 70], 16: [6, 26, 50, 74],
+    17: [6, 30, 54, 78], 18: [6, 30, 56, 82], 19: [6, 30, 58, 86],
+    20: [6, 34, 62, 90], 21: [6, 28, 50, 72, 94], 22: [6, 26, 50, 74, 98],
+    23: [6, 30, 54, 78, 102], 24: [6, 28, 54, 80, 106], 25: [6, 32, 58, 84, 110],
+    26: [6, 30, 58, 86, 114], 27: [6, 34, 62, 90, 118], 28: [6, 26, 50, 74, 98, 122],
+    29: [6, 30, 54, 78, 102, 126], 30: [6, 26, 52, 78, 104, 130],
+    31: [6, 30, 56, 82, 108, 134], 32: [6, 34, 60, 86, 112, 138],
+    33: [6, 30, 58, 86, 114, 142], 34: [6, 34, 62, 90, 118, 146],
+    35: [6, 30, 54, 78, 102, 126, 150], 36: [6, 24, 50, 76, 102, 128, 154],
+    37: [6, 28, 54, 80, 106, 132, 158], 38: [6, 32, 58, 84, 110, 136, 162],
+    39: [6, 26, 54, 82, 110, 138, 166], 40: [6, 30, 58, 86, 114, 142, 170]
+  };
+
   // 29x29 (version 3) presets. '#' = ink (dark), '.' = light.
   var TEMPLATE_ROWS = {
     CAT: [
@@ -137,8 +162,6 @@
 
   // ------------------------------ geometry -----------------------------------
 
-  var ALIGN_CENTER = { 2: 18, 3: 22, 4: 26, 5: 30, 6: 34 };
-
   /** 1 = locked structural cell (never painted), 0 = drawable. */
   function buildFunctionMask(version) {
     var n = version * 4 + 17;
@@ -154,8 +177,23 @@
     lockRect(0, n - 8, 9, 8);     // top-right finder + separator + format strip
     lockRect(n - 8, 0, 8, 9);     // bottom-left finder + separator + format strip
     for (var i = 0; i < n; i++) { mask[6 * n + i] = 1; mask[i * n + 6] = 1; } // timing
-    var c = ALIGN_CENTER[version];
-    if (c !== undefined) lockRect(c - 2, c - 2, 5, 5); // alignment pattern
+    // Alignment patterns (v2+): one 5x5 block per centre pair, except the
+    // three that would sit inside a finder pattern.
+    var pos = ALIGN_POS[version] || [];
+    for (var a = 0; a < pos.length; a++) {
+      for (var b = 0; b < pos.length; b++) {
+        var row = pos[a], col = pos[b];
+        if (row <= 7 && col <= 7) continue;              // top-left finder
+        if (row <= 7 && col >= n - 8) continue;          // top-right finder
+        if (row >= n - 8 && col <= 7) continue;          // bottom-left finder
+        lockRect(row - 2, col - 2, 5, 5);
+      }
+    }
+    // Version information (v7+): two 6x3 blocks, top-right and bottom-left.
+    if (version >= 7) {
+      lockRect(0, n - 11, 6, 3);
+      lockRect(n - 11, 0, 3, 6);
+    }
     return mask;
   }
 
@@ -278,29 +316,37 @@
     var totalData = 0;
     for (var r = 0; r < plan.rsBlocks.length; r++) totalData += plan.rsBlocks[r].dataCount;
     var bytes = utf8Len(url);
-    var usedCw = bytes + 2; // mode(4) + count(8) + bytes + terminator(4), byte-aligned
+    // Byte mode: 4-bit mode + character-count indicator + data + terminator.
+    // The count indicator is 8 bits up to v9 and 16 bits from v10 on, so the
+    // first pad codeword lands one codeword later on the bigger versions.
+    var countBits = version <= 9 ? 8 : 16;
+    var bits = 4 + countBits + bytes * 8;
+    if (bits + 4 <= totalData * 8) bits += 4; // terminator (only if it fits)
+    var usedCw = Math.ceil(bits / 8);
     return { totalData: totalData, byteLen: bytes, padCount: Math.max(0, totalData - usedCw) };
   }
 
-  var _padCache = {}; // version|mask|byteLen -> influence sets (content-independent)
+  var _padCache = {}; // version|mask|byteLen|pipeline -> influence sets (content-independent)
 
   /** Module-toggle bitmap of each pad bit (cached; depends only on shape+mask). */
-  function padInfluences(url, version, mask) {
+  function padInfluences(url, version, mask, opts) {
+    opts = opts || {};
     var shape = padShape(url, version);
     if (shape.padCount <= 0) return null;
-    var key = version + '|' + mask + '|' + shape.byteLen;
+    var build = opts.build || buildBase;
+    var key = (opts.cacheKey || 'std') + '|' + version + '|' + mask + '|' + shape.byteLen;
     if (_padCache[key]) return _padCache[key];
     var n = version * 4 + 17;
     var n2 = n * n;
     var words = (n2 + 31) >> 5;
     var zero = [];
     for (var z = 0; z < shape.padCount; z++) zero.push(0);
-    var m0 = buildBase(url, version, mask, zero).modules;
+    var m0 = build(url, version, mask, zero).modules;
     var influences = [];
     for (var b = 0; b < shape.padCount * 8; b++) {
       var pads = zero.slice();
       pads[b >> 3] = 1 << (b & 7);
-      var mb = buildBase(url, version, mask, pads).modules;
+      var mb = build(url, version, mask, pads).modules;
       var bm = new Uint32Array(words);
       var any = false;
       for (var w = 0; w < words; w++) {
@@ -326,14 +372,16 @@
    * pads (authoritative matrix straight from the encoder).
    */
   function padSolve(base, art, opts) {
+    opts = opts || {};
+    var build = opts.build || buildBase;
     var shape = padShape(base.url, base.version);
     if (shape.padCount <= 0) return null;
-    var free = padInfluences(base.url, base.version, base.mask);
+    var free = padInfluences(base.url, base.version, base.mask, opts);
     if (!free) return null;
     var n = base.n, n2 = n * n;
     var zero = [];
     for (var z = 0; z < shape.padCount; z++) zero.push(0);
-    var m0 = buildBase(base.url, base.version, base.mask, zero).modules;
+    var m0 = build(base.url, base.version, base.mask, zero).modules;
     var tw = targetWeight(art, opts);
 
     // Constraints: free cells where the zero-pad base disagrees with the target,
@@ -417,20 +465,29 @@
       for (var bit = 0; bit < 8; bit++) byteVal |= s[pb * 8 + bit] << bit;
       padBytes.push(byteVal);
     }
-    var solvedBase = buildBase(base.url, base.version, base.mask, padBytes);
+    var solvedBase = build(base.url, base.version, base.mask, padBytes);
     return { base: solvedBase, padBytes: padBytes, padBits: nv, fixed: fixed, missed: missed };
   }
 
-  // --------------------------- writable canvas --------------------------------
+  // ------------------------------- surfaces ----------------------------------
   // Workbench model: the code's randomness is kept OUT of the design area.
-  // The writable canvas is a squircle around the centre; inside it every cell
-  // is pinned to the drawing (ink → dark, background → light), and the flip
-  // budget is sized so ZERO random cells survive inside. Outside is the code
-  // ring, where the QR keeps its natural random life (unique per link).
-  // The canvas grows with the error budget (version) and with the free pad
+  // The "surface" is the region the user may paint and the region the engine
+  // guarantees to be free of random code cells. It has a shape (squircle,
+  // circle, cross) and a radius; the radius comes from the error budget, the
+  // shape is the user's choice. Outside the surface is the code ring, where the
+  // QR keeps its natural random life (unique per link).
+  // The surface grows with the error budget (version) and with the free pad
   // bits (shorter urls leave more).
 
-  var RING_W = 0.15; // background weight outside the canvas
+  var RING_W = 0.1; // background weight outside the surface
+
+  var SURFACE_KINDS = ['squircle', 'circle', 'cross'];
+
+  var SURFACE_LABELS = {
+    squircle: 'rounded square',
+    circle: 'circle',
+    cross: 'cross'
+  };
 
   /** Squircle distance of cell (x, y) from the centre, in cell units. */
   function squircleDist(x, y, n) {
@@ -439,72 +496,194 @@
     return Math.max(ax, ay) + 0.35 * Math.min(ax, ay);
   }
 
-  function canvasCells(n, R) {
+  /** Is cell (x, y) inside the surface of this shape and radius? */
+  function surfaceHas(kind, R, x, y, n) {
+    var cx = (n - 1) / 2;
+    var ax = Math.abs(x - cx), ay = Math.abs(y - cx);
+    if (kind === 'circle') return ax * ax + ay * ay <= R * R;
+    if (kind === 'cross') return ax <= R || ay <= R;
+    return squircleDist(x, y, n) <= R;
+  }
+
+  /**
+   * Cells inside the surface. This is the budget metric: the planner spends
+   * error budget on whole codewords, and a codeword that straddles the surface
+   * edge still costs a full error, so the count includes the locked cells the
+   * surface covers (the timing line, the alignment pattern, the format
+   * strips) — that is what the per-codeword estimate was calibrated against.
+   */
+  function surfaceCells(kind, R, n) {
     var c = 0;
     for (var y = 0; y < n; y++) {
       for (var x = 0; x < n; x++) {
-        if (squircleDist(x, y, n) <= R) c++;
+        if (surfaceHas(kind, R, x, y, n)) c++;
       }
     }
     return c;
   }
 
-  /** Widest row of cells spanned by the canvas (for labels). */
-  function canvasWidth(n, R) {
+  /** The cells inside the surface that can actually be painted. */
+  function surfaceDrawable(kind, R, n, func) {
+    var c = 0;
+    for (var y = 0; y < n; y++) {
+      for (var x = 0; x < n; x++) {
+        if (func && func[y * n + x]) continue;
+        if (surfaceHas(kind, R, x, y, n)) c++;
+      }
+    }
+    return c;
+  }
+
+  /** Largest radius the surface may take: the grid, and the finders' clearance. */
+  function surfaceCap(kind, n) {
     var cx = (n - 1) / 2;
+    if (kind === 'circle') return Math.min(cx, Math.SQRT2 * (cx - 7)) - 0.05;
+    if (kind === 'cross') return cx - 7.5;
+    return 1.35 * (cx - 7) - 0.05; // the squircle's diagonal must clear the finders
+  }
+
+  /** Widest row of cells spanned by the surface (for labels). */
+  function surfaceWidth(kind, R, n) {
+    var cx = (n - 1) / 2;
+    if (kind === 'cross') return n; // the arms run to the code's edges
     return Math.floor(cx + R) - Math.ceil(cx - R) + 1;
   }
 
-  function canvasAt(n, R, base) {
-    return {
-      R: R, cells: canvasCells(n, R), width: canvasWidth(n, R), n: n,
-      cwBudget: base ? base.cwBudget : 0, padBits: base ? base.padBits : 0
+  /** The surface descriptor everything else works against. */
+  var SURFACE_CORE = { kind: 1, R: 1, n: 1, cells: 1, drawable: 1, width: 1 };
+  function surfaceAt(kind, R, n, extra) {
+    var func = extra && extra.func;
+    var s = {
+      kind: kind, R: R, n: n,
+      cells: surfaceCells(kind, R, n),
+      drawable: surfaceDrawable(kind, R, n, func),
+      width: surfaceWidth(kind, R, n)
     };
+    if (extra) {
+      for (var k in extra) {
+        if (k !== 'func' && !SURFACE_CORE[k]) s[k] = extra[k];
+      }
+    }
+    return s;
   }
 
-  /** Largest squircle radius whose cell count fits `budget` (0.25-cell steps). */
-  function canvasRadiusFor(budget, n) {
-    var cap = 1.35 * ((n - 1) / 2 - 7) - 0.05; // stays clear of the finders
+  /** Largest radius whose cell count fits `budget` (0.25-cell steps). */
+  function surfaceRadiusFor(kind, budget, n) {
+    var cap = surfaceCap(kind, n);
     var R = 0, cells = 0;
+    // The cell count is a step function of the radius (a shape only changes
+    // when a cell crosses the boundary), so scan the whole range and keep the
+    // largest radius that still fits.
     for (var r = 2; r <= cap; r += 0.25) {
-      var c = canvasCells(n, r);
-      if (c <= budget) { R = r; cells = c; } else break;
+      var c = surfaceCells(kind, r, n);
+      if (c <= budget) { R = r; cells = c; }
     }
     return { R: R, cells: cells };
   }
 
   /**
-   * Canvas geometry for a url + version. Each sacrificed codeword pins ~7 of
-   * its canvas cells (the planner picks the densest codewords first); each
-   * free pad bit patches ~0.55 of a cell (its toggle set is scattered and can
-   * overlap). The 0.88 aggression leaves the last stretch to the adaptive fit,
-   * which shrinks rather than overrun.
+   * How many codewords a surface touches. A codeword is eight modules (four
+   * rows by two columns), so a blob of C cells needs about C/8 of them, plus
+   * the ones that straddle the edge — roughly 1.3 per cell of radius.
+   */
+  function surfaceCodewords(cells, R) {
+    return cells / 8 + 1.3 * R;
+  }
+
+  /**
+   * Does a surface fit inside the error budget? The budget is per RS block: a
+   * block can absorb t sacrificed codewords. The codewords a surface touches
+   * are not spread evenly over the blocks — the placement walk hands them out
+   * in runs, and the runs start on different blocks — so the tightest block
+   * decides, not the average.
+   */
+  function surfaceFitsBlocks(base, kind, R, factor) {
+    var n = base.n, plan = base.plan;
+    var counts = new Int32Array(plan.blockCount);
+    var seen = new Uint8Array(plan.totalCw);
+    for (var i = 0; i < n * n; i++) {
+      if (base.func[i]) continue;
+      if (!surfaceHas(kind, R, i % n, (i / n) | 0, n)) continue;
+      var cw = base.cwOf[i];
+      if (cw < 0 || seen[cw]) continue;
+      seen[cw] = 1;
+      counts[plan.blockOf[cw]]++;
+    }
+    for (var b = 0; b < plan.blockCount; b++) {
+      if (counts[b] > plan.tPerBlock[b] * factor) return false;
+    }
+    return true;
+  }
+
+  /**
+   * The largest radius of this shape the error budget can hold: enough
+   * codewords overall, and no single RS block over its share.
+   */
+  function surfaceRadiusForBudget(base, kind, budgetCw, factor, cap, n) {
+    var R = 0;
+    for (var r = 0.25; r <= cap; r += 0.25) {
+      var c = surfaceCells(kind, r, n);
+      // the heuristic is a stand-in when no base is available; with one, the
+      // real codeword count decides
+      if (!base && surfaceCodewords(c, r) > budgetCw) continue;
+      if (base && !surfaceFitsBlocks(base, kind, r, factor)) continue;
+      R = r;
+    }
+    return R;
+  }
+
+  /**
+   * Surface geometry for a url + version. Two limits decide the size: the
+   * number of codewords the error correction can spare, and the tightest RS
+   * block (a block can only absorb so many sacrificed codewords). The
+   * estimate is deliberately conservative — the grow pass, not this formula,
+   * decides where the surface really ends.
    */
   function canvasShape(url, version, opts) {
     opts = opts || {};
-    var aggression = opts.aggression !== undefined ? opts.aggression : 0.88;
+    var kind = opts.surface || 'squircle';
+    var aggression = opts.aggression !== undefined ? opts.aggression : 1.0;
     var plan = codePlan(version);
     var tSum = 0;
     for (var b = 0; b < plan.tPerBlock.length; b++) tSum += plan.tPerBlock[b];
     var padBits = 0;
     try { padBits = padShape(url, version).padCount * 8; } catch (e) { padBits = 0; }
-    var budget = (tSum * 7 + padBits * 0.55) * aggression;
+    // The budget: codewords the error correction can spare. The planner
+    // cannot use every one of them (a codeword that straddles the edge pins
+    // fewer cells), so the estimate keeps a margin over the raw capacity.
+    var budgetCw = tSum * 0.85 * aggression;
     var n = version * 4 + 17;
-    var fit = canvasRadiusFor(budget, n);
-    var shape = canvasAt(n, fit.R, null);
-    shape.cwBudget = tSum;
-    shape.padBits = padBits;
+    var func = buildFunctionMask(version);
+    var cap = surfaceCap(kind, n);
+    // The placement walk does not depend on the mask, so one base is enough
+    // to ask where the blocks sit.
+    var base = null;
+    try { base = buildBase(url, version, 0); } catch (e) { base = null; }
+    var R = surfaceRadiusForBudget(base, kind, budgetCw, 0.95, cap, n);
+    var shape = surfaceAt(kind, R, n, { cwBudget: tSum, padBits: padBits, func: func });
     return shape;
   }
 
-  /** Residual mismatches inside the canvas for a final module matrix. */
+  /**
+   * The surface as a plain descriptor — what the fit works against. Accepts
+   * either a surface object or the legacy {canvasR} pair.
+   */
+  function surfaceOf(opts, n) {
+    if (opts && opts.surface && typeof opts.surface === 'object') return opts.surface;
+    var kind = (opts && opts.surface) || 'squircle';
+    var R = opts && opts.canvasR !== undefined ? opts.canvasR : 0;
+    return surfaceAt(kind, R, n, null);
+  }
+
+  /** Residual mismatches inside the surface for a final module matrix. */
   function canvasResidual(modules, base, art, opts) {
     var tw = targetWeight(art, opts);
     var n = base.n;
+    var surf = surfaceOf(opts, n);
     var out = { bg: 0, ink: 0, cells: 0 };
     for (var i = 0; i < n * n; i++) {
       if (base.func[i]) continue;
-      if (squircleDist(i % n, (i / n) | 0, n) > opts.canvasR) continue;
+      if (!surfaceHas(surf.kind, surf.R, i % n, (i / n) | 0, n)) continue;
       out.cells++;
       if (modules[i] === tw.target[i]) continue;
       if (tw.target[i] === 1) out.ink++; else out.bg++;
@@ -516,7 +695,8 @@
   function manualFit(url, version, art, opts) {
     opts = opts || {};
     var mask = typeof opts.mask === 'number' ? opts.mask : 0;
-    var base = buildBase(url, version, mask);
+    var build = opts.build || buildBase;
+    var base = build(url, version, mask, null);
     var pad = padSolve(base, art, opts);
     if (pad && pad.fixed > 0) base = pad.base;
     var plan = planFlips(base, art, opts);
@@ -524,35 +704,86 @@
   }
 
   /**
-   * The workbench pipeline: canvas sizing → encoding search (or reuse) → pad
+   * The workbench pipeline: surface sizing → encoding search (or reuse) → pad
    * solve → flip budget → decode verify — then check the promise: zero random
-   * cells inside the canvas. Retry order keeps the canvas STABLE and as big as
-   * possible: (1) the established/re-used encoding, (2) a full search,
+   * cells inside the surface. Retry order keeps the surface STABLE and as big
+   * as possible: (1) the established/re-used encoding, (2) a full search,
    * (3) the runner-up encodings at the same radius, and only if everything
-   * fails, (4) shrink one step and start over.
+   * fails, (4) shrink one step and start over. After a clean fit the grow pass
+   * pushes the surface out while the promise still holds — that is where the
+   * free area gets as large as the error budget allows.
    * opts.reuse {mask, suffix} — fast path for painting (skip the search, keep
-   * the established encoding). Returns { fit, t, canvas, residual, attempts }.
+   * the established encoding).
+   * opts.surface — 'squircle' | 'circle' | 'cross': the shape of the free area.
+   * opts.grow — grow the surface while it still holds (default: on unless the
+   * caller pinned the radius with opts.canvasR).
+   * Returns { fit, t, canvas, residual, attempts }.
    */
   function fitWorkbench(url, version, art, opts) {
     opts = opts || {};
-    var shape = canvasShape(url, version, opts);
-    if (opts.canvasR !== undefined) shape = canvasAt(shape.n, opts.canvasR, shape);
-    if (shape.R < 3) throw 'link too long for version ' + version;
+    var kind = typeof opts.surface === 'string' ? opts.surface
+      : (opts.surface && opts.surface.kind) || 'squircle';
+    var shape;
+    if (opts.surface && typeof opts.surface === 'object') {
+      shape = opts.surface;
+    } else {
+      shape = canvasShape(url, version, { surface: kind, aggression: opts.aggression });
+    }
+    if (opts.canvasR !== undefined) shape = surfaceAt(kind, opts.canvasR, shape.n, shape);
+    if (shape.R <= 0 || shape.cells < 20) {
+      throw 'not enough room to draw at version ' + version + ' — try another surface or version';
+    }
     var manual = typeof opts.mask === 'number';
     var last = null;
     var tried = {};
     var doneSearch = manual; // manual masks never run the search
     var attempts = 0;
 
-    function evaluate(fit) {
+    function evaluate(fit, surf) {
+      surf = surf || shape;
       var t = autoTune(fit.base, art, {
         strength: 1.0,
         margin: opts.margin !== undefined ? opts.margin : 1.0,
-        plan: fit.plan, style: opts.style, canvasR: shape.R
+        plan: fit.plan, style: opts.style, surface: surf, verify: opts.verify
       });
-      var residual = canvasResidual(t.modules, fit.base, art, { canvasR: shape.R });
+      var residual = canvasResidual(t.modules, fit.base, art, { surface: surf });
       attempts++;
-      return { fit: fit, t: t, canvas: shape, residual: residual, attempts: attempts };
+      return { fit: fit, t: t, canvas: surf, residual: residual, attempts: attempts };
+    }
+
+    /**
+     * The grow pass: the surface starts from the budget estimate, which is a
+     * guess. This pushes it out in quarter-cell steps while the promise still
+     * holds — zero random cells inside, every stroke realised, and the code
+     * still decoding. It stops at the first step that breaks any of those, so
+     * the surface ends up as large as the error budget genuinely allows.
+     */
+    function grow(res) {
+      if (opts.grow === false) return res;
+      if (opts.grow === undefined && opts.canvasR !== undefined) return res;
+      var cap = opts.surfaceCap !== undefined ? opts.surfaceCap : surfaceCap(kind, shape.n);
+      var best = res;
+      for (var step = 0; step < 16; step++) {
+        var R2 = best.canvas.R + 0.25;
+        if (R2 > cap) break;
+        var o = {};
+        for (var k in opts) o[k] = opts[k];
+        var surf = surfaceAt(kind, R2, shape.n, res.canvas);
+        o.surface = surf;
+        o.mask = best.fit.mask;
+        o.suffix = best.fit.suffix || '';
+        var fit = manualFit(url + o.suffix, version, art, o);
+        var t = autoTune(fit.base, art, {
+          strength: 1.0,
+          margin: opts.margin !== undefined ? opts.margin : 1.0,
+          plan: fit.plan, style: opts.style, surface: surf, verify: opts.verify
+        });
+        var residual = canvasResidual(t.modules, fit.base, art, { surface: surf });
+        attempts++;
+        if (residual.bg !== 0 || residual.ink !== 0 || !t.verified) break;
+        best = { fit: fit, t: t, canvas: surf, residual: residual, attempts: attempts };
+      }
+      return best;
     }
 
     for (var round = 0; round < 4; round++) {
@@ -568,7 +799,7 @@
         var ref = queue[qi];
         var o = {};
         for (var k in opts) o[k] = opts[k];
-        o.canvasR = shape.R;
+        o.surface = shape;
         var fit;
         if (ref) {
           tried[ref.mask + '|' + (ref.suffix || '')] = true;
@@ -587,19 +818,20 @@
           }
         }
         last = evaluate(fit);
-        if (last.residual.bg === 0 && last.residual.ink === 0) return last;
+        if (last.residual.bg === 0 && last.residual.ink === 0) return grow(last);
       }
       // still stray cells: shrink one step and try again at the smaller radius
       var n2 = shape.n;
-      var R2 = shape.R - 0.5;
-      while (R2 > 3 && canvasCells(n2, R2) >= shape.cells) R2 -= 0.25;
-      if (R2 <= 3) break;
-      shape = canvasAt(n2, R2, shape);
+      var R2 = shape.R - 0.25;
+      while (R2 > 0 && surfaceCells(kind, R2, n2) >= shape.cells) R2 -= 0.25;
+      if (R2 <= 0) break;
+      shape = surfaceAt(kind, R2, n2, shape);
       doneSearch = manual;
       tried = {};
     }
     return last;
   }
+
 
   /** Pre-mask bitstream (1 = dark before masking) in placement order. */
   function extractPreMaskBits(modules, order, mask, n) {
@@ -658,12 +890,13 @@
     var R1 = n * 0.33, R2 = n * 0.44; // plaza: flat 1.0 inside R1, fade to floor by R2
     var target = new Uint8Array(n2);
     var weight = new Float32Array(n2);
-    if (opts.canvasR !== undefined) {
-      // Workbench mode: strict writable canvas. Inside: pinned to the drawing
+    if (opts.canvasR !== undefined || (opts.surface && typeof opts.surface === 'object')) {
+      // Workbench mode: strict surface. Inside: pinned to the drawing
       // (ink dark, everything else light). Outside: the code ring — the QR's
       // own randomness, only lightly discouraged from spending budget.
+      var surf = surfaceOf(opts, n);
       for (var c = 0; c < n2; c++) {
-        var inside = squircleDist(c % n, (c / n) | 0, n) <= opts.canvasR;
+        var inside = surfaceHas(surf.kind, surf.R, c % n, (c / n) | 0, n);
         if (art[c] === 1) { target[c] = 1; weight[c] = inside ? inkBoost : 1.0; }
         else if (art[c] === 0) { target[c] = 0; weight[c] = inside ? 1.0 : RING_W; }
         else { target[c] = 0; weight[c] = inside ? 0.9 : RING_W * 0.85; }
@@ -778,6 +1011,7 @@
       margin: opts.margin !== undefined ? opts.margin : 1.0,
       inkBoost: opts.inkBoost,
       focus: opts.focus,
+      surface: opts.surface,
       canvasR: opts.canvasR
     };
     var suffixes = [''];
@@ -787,11 +1021,12 @@
       for (var a = 0; a < alphabet.length; a++) suffixes.push('#' + alphabet[a]);
     }
     var candidates = [];
+    var build = opts.build || buildBase;
     for (var s = 0; s < suffixes.length; s++) {
       for (var m = 0; m < 8; m++) {
         var base;
         try {
-          base = buildBase(url + suffixes[s], version, m);
+          base = build(url + suffixes[s], version, m, null);
         } catch (e) {
           continue; // suffix doesn't fit this version — skip
         }
@@ -801,7 +1036,7 @@
     }
     if (!candidates.length) {
       // fall back: base without suffix, mask 0
-      var b0 = buildBase(url, version, 0);
+      var b0 = build(url, version, 0, null);
       return { url: url, suffix: '', mask: 0, base: b0, plan: planFlips(b0, art, flipOpts), score: 0, pad: null };
     }
     candidates.sort(function (a, b) { return b.score - a.score; });
@@ -848,8 +1083,9 @@
    *  'dots' (circles). Styled variants also redraw the three finders as
    *  rounded rings — the commercial "design QR" look — and are verified by
    *  decoding the styled raster itself. */
-  function renderRGBA(modules, n, box, border, style) {
+  function renderRGBA(modules, n, box, border, style, opts) {
     style = style || 'square';
+    opts = opts || {};
     var w = (n + 2 * border) * box;
     var data = new Uint8ClampedArray(w * w * 4);
     data.fill(255);
@@ -999,8 +1235,15 @@
     }
     var shapes = styleShapes(style);
     var modInside = shapes.mod;
+    // The finder patterns: the standard three corners, or wherever a custom
+    // layout puts them.
+    var finders = opts.finders || [{ x: 0, y: 0 }, { x: n - 7, y: 0 }, { x: 0, y: n - 7 }];
     var inFinder = function (x, y) {
-      return (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7);
+      for (var fi = 0; fi < finders.length; fi++) {
+        var f = finders[fi];
+        if (x >= f.x && x < f.x + 7 && y >= f.y && y < f.y + 7) return true;
+      }
+      return false;
     };
     for (var y = 0; y < n; y++) {
       for (var x = 0; x < n; x++) {
@@ -1009,7 +1252,8 @@
       }
     }
     var eyeInside = shapes.eye;
-    var zones = [[0, 0], [n - 7, 0], [0, n - 7]];
+    var zones = [];
+    for (var z = 0; z < finders.length; z++) zones.push([finders[z].x, finders[z].y]);
     for (var f = 0; f < 3; f++) {
       var fx = zones[f][0], fy = zones[f][1];
       for (var py2 = (fy + border) * box; py2 < (fy + border + 7) * box; py2++) {
@@ -1055,6 +1299,133 @@
     return { clean: clean, stressed: stressed };
   }
 
+  // ------------------------------- round output -------------------------------
+  // A profile picture is a circle, and a circle has no corners: the three
+  // finder patterns of a square QR sit exactly where a circular crop would
+  // eat them. Two ways out, one for each pipeline:
+  //
+  //   standard — the QR square is INSCRIBED in the circle, so all three eyes
+  //              are inside it and the code is a standard one. The circle is
+  //              the quiet zone.
+  //   custom   — the grid is a disc, so the code fills the circle edge to
+  //              edge and the finder patterns live inside it.
+
+  /**
+   * The round avatar geometry for a standard QR: the square is inscribed in
+   * the circle, so its corners (the eyes) touch the rim. `shrink` pulls it
+   * in a touch, so the eyes sit clear of the edge.
+   */
+  function roundLayout(n, D, shrink) {
+    shrink = shrink || 0.94;
+    var r = (D / 2) * shrink;
+    var box = Math.max(1, Math.floor((r * Math.SQRT2) / n));
+    var side = box * n;
+    return { box: box, side: side, off: Math.round((D - side) / 2), size: D, shrink: shrink };
+  }
+
+  /**
+   * A round avatar of a standard QR: white inside the circle, transparent
+   * outside it, the code inscribed so every finder pattern survives the crop.
+   */
+  function renderRoundRGBA(modules, n, D, style, opts) {
+    opts = opts || {};
+    var lay = roundLayout(n, D, opts.shrink);
+    if (opts.box) lay.box = opts.box;
+    lay.side = lay.box * n;
+    lay.off = Math.round((D - lay.side) / 2);
+    var q = renderRGBA(modules, n, lay.box, 0, style, opts);
+    var data = new Uint8ClampedArray(D * D * 4);
+    var R = D / 2;
+    for (var y = 0; y < D; y++) {
+      for (var x = 0; x < D; x++) {
+        var p = (y * D + x) * 4;
+        var dx = x + 0.5 - R, dy = y + 0.5 - R;
+        if (dx * dx + dy * dy > R * R) {
+          // outside the circle: transparent — but white in the colour channels,
+          // so a decoder that ignores alpha still sees a quiet zone
+          data[p] = data[p + 1] = data[p + 2] = 255;
+          data[p + 3] = 0;
+          continue;
+        }
+        data[p] = data[p + 1] = data[p + 2] = 255;
+        data[p + 3] = 255;
+        var qx = x - lay.off, qy = y - lay.off;
+        if (qx >= 0 && qy >= 0 && qx < lay.side && qy < lay.side) {
+          var s = (qy * q.width + qx) * 4;
+          data[p] = q.data[s]; data[p + 1] = q.data[s + 1]; data[p + 2] = q.data[s + 2];
+        }
+      }
+    }
+    return { data: data, width: D, height: D, layout: lay };
+  }
+
+  /**
+   * The avatar's module size: the largest that still decodes. A styled render
+   * is not perfectly scale-invariant — at one size in twenty a finder pattern
+   * can blur just enough to lose it — so the export walks down a few sizes
+   * and keeps the first a real decoder reads. Without a url to check against
+   * it just returns the nominal size.
+   */
+  function roundAvatarBox(modules, n, D, style, opts) {
+    opts = opts || {};
+    var lay = roundLayout(n, D, opts.shrink);
+    if (!opts.url) return lay.box;
+    for (var k = 0; k < 4; k++) {
+      var box = lay.box - k;
+      if (box < 1) break;
+      var img = renderRoundRGBA(modules, n, D, style, {
+        shrink: opts.shrink, box: box, finders: opts.finders
+      });
+      if (decodeRGBA(img) === opts.url) return box;
+    }
+    return lay.box;
+  }
+
+  /**
+   * A round avatar of the custom layout: the disc is drawn edge to edge and
+   * everything outside it is transparent, so the code fills the circle.
+   */
+  function renderDiscRGBA(modules, G, layout, D, style, opts) {
+    opts = opts || {};
+    var shrink = opts.shrink || 0.97;
+    var box = Math.max(1, Math.floor((D / 2) * shrink / (layout.rDisc + 0.5)));
+    var off = Math.round((D - box * G) / 2);
+    var q = renderRGBA(modules, G, box, 0, style, { finders: customFinderCorners(layout) });
+    var data = new Uint8ClampedArray(D * D * 4);
+    var R = D / 2;
+    for (var y = 0; y < D; y++) {
+      for (var x = 0; x < D; x++) {
+        var p = (y * D + x) * 4;
+        var dx = x + 0.5 - R, dy = y + 0.5 - R;
+        if (dx * dx + dy * dy > R * R) {
+          data[p] = data[p + 1] = data[p + 2] = 255;
+          data[p + 3] = 0;
+          continue; // outside the circle: transparent
+        }
+        data[p] = data[p + 1] = data[p + 2] = 255;
+        data[p + 3] = 255;
+        var qx = x - off, qy = y - off;
+        if (qx >= 0 && qy >= 0 && qx < q.width && qy < q.height) {
+          var s = (qy * q.width + qx) * 4;
+          var a = q.data[s + 3];
+          if (a) {
+            data[p] = q.data[s]; data[p + 1] = q.data[s + 1]; data[p + 2] = q.data[s + 2];
+          }
+        }
+      }
+    }
+    return { data: data, width: D, height: D, layout: { box: box, off: off, size: D } };
+  }
+
+  /** The top-left corners of the custom layout's finder patterns. */
+  function customFinderCorners(layout) {
+    var out = [];
+    for (var i = 0; i < layout.finders.length; i++) {
+      out.push({ x: layout.finders[i].x - 3, y: layout.finders[i].y - 3 });
+    }
+    return out;
+  }
+
   // ------------------------------- tuning ------------------------------------
 
   /**
@@ -1068,8 +1439,13 @@
     opts = opts || {};
     var plan = opts.plan || planFlips(base, art, opts);
     var budgeted = plan.selected;
+    // The verifier: the standard pipeline decodes the rendered code with a
+    // real decoder (jsQR); a custom pipeline brings its own.
+    var verifyFn = opts.verify || function (modules, b) {
+      return verify(modules, b.n, b.url, opts.style);
+    };
 
-    var baseline = verify(base.modules, base.n, base.url, opts.style);
+    var baseline = verifyFn(base.modules, base);
     if (!baseline.clean) {
       var baseRes0 = { clean: baseline.clean, stressed: baseline.stressed };
       return { modules: base.modules, flips: 0, cwUsed: 0, cwBudget: budgeted.length,
@@ -1083,7 +1459,7 @@
     var result = null;
     for (var iter = 1; iter <= 12; iter++) {
       var applied = applyPlan(base, plan, keep);
-      var res = verify(applied.modules, base.n, base.url, opts.style);
+      var res = verifyFn(applied.modules, base);
       result = { modules: applied.modules, flips: applied.flips, cwUsed: keep.length,
                  cwBudget: budgeted.length, conflicts: plan.conflicts, iterations: iter,
                  verified: false, clean: res.clean, stressed: res.stressed,
@@ -1097,7 +1473,7 @@
       if (keep.length === 0) break;
       keep = keep.slice(0, Math.floor(keep.length * 0.75));
     }
-    var baseRes = verify(base.modules, base.n, base.url, opts.style);
+    var baseRes = verifyFn(base.modules, base);
     return { modules: base.modules, flips: 0, cwUsed: 0, cwBudget: budgeted.length,
              conflicts: plan.conflicts, iterations: 12, verified: false,
              inkRealized: 0, clean: baseRes.clean, stressed: baseRes.stressed,
@@ -1132,18 +1508,422 @@
     return best.mask;
   }
 
+  // ------------------------------ RS decoding ---------------------------------
+  // GF(256) with the QR primitive polynomial x^8 + x^4 + x^3 + x^2 + 1 (0x11d).
+  // The standard pipeline verifies itself with jsQR (a real decoder); the
+  // custom pipeline has no such luxury, so the engine carries its own
+  // Reed-Solomon decoder: syndromes, Berlekamp-Massey, Chien search, Forney.
+
+  var EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  (function () {
+    var x = 1;
+    for (var i = 0; i < 255; i++) {
+      EXP[i] = x; LOG[x] = i;
+      x <<= 1;
+      if (x & 0x100) x ^= 0x11d;
+    }
+    for (var j = 255; j < 512; j++) EXP[j] = EXP[j - 255];
+  })();
+
+  function gmul(a, b) { return (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]]; }
+  function gdiv(a, b) { return a === 0 ? 0 : EXP[(LOG[a] + 255 - LOG[b]) % 255]; }
+
+  function polyEval(p, xv) {
+    var v = 0, xp = 1;
+    for (var i = 0; i < p.length; i++) { v ^= gmul(p[i], xp); xp = gmul(xp, xv); }
+    return v;
+  }
+
+  /**
+   * Correct one Reed-Solomon block. `msg` is the codeword (data then error
+   * codewords, highest degree first); `ecCount` is the number of error
+   * codewords. Returns the corrected data bytes, or null when the block is
+   * beyond repair.
+   */
+  function rsDecode(msg, ecCount) {
+    var n = msg.length, i, j;
+    var synd = [];
+    for (i = 0; i < ecCount; i++) {
+      var s = 0;
+      for (j = 0; j < n; j++) s = gmul(s, EXP[i]) ^ msg[j];
+      synd.push(s);
+    }
+    var any = false;
+    for (i = 0; i < ecCount; i++) if (synd[i]) { any = true; break; }
+    if (!any) return msg.slice(0, n - ecCount);
+
+    // Berlekamp-Massey: the error locator sigma(x)
+    var sigma = [1], old = [1], L = 0, m = 1, b = 1;
+    for (i = 0; i < ecCount; i++) {
+      var delta = synd[i];
+      for (j = 1; j <= L; j++) delta ^= gmul(sigma[j], synd[i - j]);
+      if (delta === 0) { m++; continue; }
+      var scale = gdiv(delta, b);
+      var t = (2 * L <= i) ? sigma.slice() : null;
+      for (j = 0; j < old.length; j++) {
+        while (sigma.length <= j + m) sigma.push(0);
+        sigma[j + m] ^= gmul(scale, old[j]);
+      }
+      if (t) { L = i + 1 - L; old = t; b = delta; m = 1; } else m++;
+    }
+
+    // Chien search: a root of sigma means an error at that codeword
+    var errs = [];
+    for (var k = 0; k < n; k++) {
+      var deg = n - 1 - k;
+      var xk = EXP[(255 - (deg % 255)) % 255];
+      var sum = 0, xp = 1;
+      for (var q = 0; q < sigma.length; q++) { sum ^= gmul(sigma[q], xp); xp = gmul(xp, xk); }
+      if (sum === 0) errs.push(k);
+    }
+    if (errs.length !== L) return null;
+
+    // Forney: omega(x) = S(x)·sigma(x) mod x^ecCount, and the derivative
+    var omega = [];
+    for (i = 0; i < ecCount; i++) {
+      var acc = 0;
+      for (j = 0; j <= i; j++) if (sigma[j]) acc ^= gmul(sigma[j], synd[i - j]);
+      omega.push(acc);
+    }
+    var dsigma = [];
+    for (i = 1; i < sigma.length; i += 2) dsigma[i - 1] = sigma[i];
+
+    var out = msg.slice();
+    for (i = 0; i < errs.length; i++) {
+      k = errs[i];
+      deg = n - 1 - k;
+      var Xi = EXP[deg % 255];
+      var XiInv = EXP[(255 - (deg % 255)) % 255];
+      var den = polyEval(dsigma, XiInv);
+      if (den === 0) return null;
+      out[k] ^= gmul(gdiv(polyEval(omega, XiInv), den), Xi);
+    }
+    for (i = 0; i < ecCount; i++) {
+      var s2 = 0;
+      for (j = 0; j < n; j++) s2 = gmul(s2, EXP[i]) ^ out[j];
+      if (s2 !== 0) return null; // still broken — refuse the block
+    }
+    return out.slice(0, n - ecCount);
+  }
+
+  /** The payload out of a block's data codewords (byte mode). */
+  function parsePayload(bytes, version) {
+    var countBits = version <= 9 ? 8 : 16;
+    function readBits(pos, len) {
+      var v = 0;
+      for (var i = 0; i < len; i++) {
+        v = (v << 1) | ((bytes[(pos + i) >> 3] >> (7 - ((pos + i) & 7))) & 1);
+      }
+      return v;
+    }
+    if (bytes.length < 3) return null;
+    var mode = readBits(0, 4);
+    if (mode !== 4) return null; // byte mode only
+    var len = readBits(4, countBits);
+    var need = 4 + countBits + len * 8;
+    if (need > bytes.length * 8) return null;
+    var raw = [];
+    for (var i = 0; i < len; i++) raw.push(readBits(4 + countBits + i * 8, 8));
+    if (typeof TextDecoder !== 'undefined') {
+      try { return new TextDecoder('utf-8').decode(new Uint8Array(raw)); } catch (e) { /* fall through */ }
+    }
+    var out = '';
+    for (i = 0; i < raw.length; i++) out += String.fromCharCode(raw[i]);
+    return out;
+  }
+
+  // -------------------------- the custom pipeline -----------------------------
+  // A second backend, and our own: instead of the standard square QR, a
+  // circle-native one. The module grid is a DISC, not a square, so the code
+  // fills a round avatar edge to edge; the three finder patterns sit inside
+  // it, 120° apart, where a square QR would have put them on the corners —
+  // and a circular crop eats the corners. The payload, the Reed-Solomon
+  // coding, the interleaving and the mask are all the standard ones; only the
+  // LAYOUT is ours. So it is not a standard QR: nothing but a decoder that
+  // knows this layout reads it.
+
+  var FINDER_BLOCK = 81; // 7×7 finder + a one-cell light ring (the separator)
+
+  /** The K cells nearest the centre of a G×G grid — a disc. */
+  function discCells(K, G) {
+    var c = (G - 1) / 2;
+    var cells = [];
+    for (var y = 0; y < G; y++) {
+      for (var x = 0; x < G; x++) {
+        var dx = x - c, dy = y - c;
+        cells.push({ x: x, y: y, d: dx * dx + dy * dy, i: y * G + x });
+      }
+    }
+    cells.sort(function (a, b) { return a.d - b.d || a.i - b.i; });
+    return cells.slice(0, K);
+  }
+
+  /**
+   * The custom layout: a disc of modules with three finder patterns inside it.
+   * The disc's size is fixed by the version — it must hold exactly the code
+   * words of the payload — and the finders are placed as far out as they fit,
+   * leaving the middle for the drawing.
+   */
+  function customLayout(version, opts) {
+    opts = opts || {};
+    var plan = codePlan(version);
+    var remainder = REMAINDER_BITS[version] || 0;
+    var dataCells = plan.totalCw * 8 + remainder;
+    var K = dataCells + 3 * FINDER_BLOCK;
+    var guess = Math.ceil(Math.sqrt(K / Math.PI)) + 3;
+    var G = 2 * guess + 1;
+    var disc = discCells(K, G);
+    var c = (G - 1) / 2;
+    var rDisc = 0;
+    for (var i = 0; i < disc.length; i++) {
+      var d = Math.sqrt(disc[i].d);
+      if (d > rDisc) rDisc = d;
+    }
+
+    // The three finders: 120° apart, as far out as the disc allows.
+    var inDisc = new Uint8Array(G * G);
+    for (i = 0; i < disc.length; i++) inDisc[disc[i].i] = 1;
+    function fits(dFind) {
+      for (var a = 0; a < 3; a++) {
+        var ang = -Math.PI / 2 + a * 2 * Math.PI / 3;
+        var fx = Math.round(c + dFind * Math.cos(ang));
+        var fy = Math.round(c + dFind * Math.sin(ang));
+        for (var dy = -4; dy <= 4; dy++) {
+          for (var dx = -4; dx <= 4; dx++) {
+            var x = fx + dx, y = fy + dy;
+            if (x < 0 || y < 0 || x >= G || y >= G) return false;
+            if (!inDisc[y * G + x]) return false;
+          }
+        }
+      }
+      return true;
+    }
+    var dFind = rDisc - 1;
+    while (dFind > 4 && !fits(dFind)) dFind -= 0.5;
+    if (!fits(dFind)) dFind = Math.max(2, rDisc - 7);
+
+    var func = new Uint8Array(G * G);
+    var finders = [];
+    for (var a2 = 0; a2 < 3; a2++) {
+      var ang2 = -Math.PI / 2 + a2 * 2 * Math.PI / 3;
+      var fx2 = Math.round(c + dFind * Math.cos(ang2));
+      var fy2 = Math.round(c + dFind * Math.sin(ang2));
+      finders.push({ x: fx2, y: fy2 });
+      for (var dy2 = -4; dy2 <= 4; dy2++) {
+        for (var dx2 = -4; dx2 <= 4; dx2++) {
+          var x2 = fx2 + dx2, y2 = fy2 + dy2;
+          if (x2 >= 0 && y2 >= 0 && x2 < G && y2 < G) func[y2 * G + x2] = 1;
+        }
+      }
+    }
+
+    // The walk: column pairs right to left, rows alternating, disc cells only.
+    var order = [];
+    var col = G - 1, upward = true;
+    while (col > 0) {
+      for (var k = 0; k < G; k++) {
+        var y3 = upward ? (G - 1 - k) : k;
+        for (var dxc = 0; dxc < 2; dxc++) {
+          var x3 = col - dxc;
+          var idx = y3 * G + x3;
+          if (!inDisc[idx] || func[idx]) continue;
+          order.push(idx);
+        }
+      }
+      upward = !upward;
+      col -= 2;
+    }
+
+    return {
+      version: version, G: G, c: c, rDisc: rDisc, dFind: dFind,
+      disc: disc, inDisc: inDisc, func: func, order: order, finders: finders,
+      plan: plan, dataCells: dataCells, remainder: remainder
+    };
+  }
+
+  /** Paint the three finder patterns (7×7 with a one-cell light ring). */
+  function drawCustomFinders(modules, layout) {
+    var G = layout.G;
+    for (var f = 0; f < layout.finders.length; f++) {
+      var fx = layout.finders[f].x, fy = layout.finders[f].y;
+      for (var dy = -4; dy <= 4; dy++) {
+        for (var dx = -4; dx <= 4; dx++) {
+          var x = fx + dx, y = fy + dy;
+          if (x < 0 || y < 0 || x >= G || y >= G) continue;
+          var ring = (Math.abs(dx) === 3 || Math.abs(dy) === 3);
+          var core = (Math.abs(dx) <= 1 && Math.abs(dy) <= 1);
+          modules[y * G + x] = (ring || core) ? 1 : 0;
+        }
+      }
+    }
+  }
+
+  /**
+   * Build the custom base: the standard code words, placed in our layout.
+   * The payload, the RS coding, the interleaving and the mask are the
+   * standard ones — only the grid and the finder positions are ours.
+   */
+  function buildCustom(url, version, mask, padBytes, layout) {
+    var std = buildBase(url, version, mask, padBytes);
+    var bits = extractPreMaskBits(std.modules, std.order, mask, std.n);
+    var G = layout.G;
+    var modules = new Uint8Array(G * G);
+    drawCustomFinders(modules, layout);
+    for (var p = 0; p < layout.order.length && p < bits.length; p++) {
+      var i = layout.order[p];
+      var y = (i / G) | 0, x = i % G;
+      var bit = bits[p] ? 1 : 0;
+      modules[i] = maskAt(mask, y, x) ? (bit ? 0 : 1) : bit;
+    }
+    var cwOf = new Int32Array(G * G).fill(-1);
+    var cwBits = layout.plan.totalCw * 8;
+    for (var q = 0; q < layout.order.length && q < cwBits; q++) cwOf[layout.order[q]] = q >> 3;
+    var drawable = 0;
+    for (var z = 0; z < G * G; z++) if (!layout.func[z]) drawable++;
+    return {
+      n: G, version: version, mask: mask, url: url, modules: modules,
+      func: layout.func, drawable: drawable, order: layout.order,
+      plan: layout.plan, cwOf: cwOf, remainder: layout.order.length - cwBits,
+      layout: layout, grid: G
+    };
+  }
+
+  /** Read the custom layout back: the walk, the mask, the RS correction. */
+  function decodeCustom(modules, layout, mask) {
+    var G = layout.G;
+    var bits = new Uint8Array(layout.order.length);
+    for (var p = 0; p < layout.order.length; p++) {
+      var i = layout.order[p];
+      var y = (i / G) | 0, x = i % G;
+      bits[p] = modules[i] ^ (maskAt(mask, y, x) ? 1 : 0);
+    }
+    var plan = layout.plan;
+    var bytes = [];
+    for (var c = 0; c < plan.totalCw; c++) {
+      var b = 0;
+      for (var k = 0; k < 8; k++) b = (b << 1) | bits[c * 8 + k];
+      bytes.push(b);
+    }
+    var blocks = [];
+    for (var r = 0; r < plan.blockCount; r++) blocks.push([]);
+    var idx = 0;
+    for (var i = 0; i < plan.maxDc; i++) {
+      for (var r2 = 0; r2 < plan.blockCount; r2++) if (i < plan.rsBlocks[r2].dataCount) blocks[r2].push(bytes[idx++]);
+    }
+    for (var i2 = 0; i2 < plan.maxEc; i2++) {
+      for (var r3 = 0; r3 < plan.blockCount; r3++) {
+        if (i2 < (plan.rsBlocks[r3].totalCount - plan.rsBlocks[r3].dataCount)) blocks[r3].push(bytes[idx++]);
+      }
+    }
+    var data = [];
+    for (var r4 = 0; r4 < blocks.length; r4++) {
+      var ec = plan.rsBlocks[r4].totalCount - plan.rsBlocks[r4].dataCount;
+      var fixed = rsDecode(blocks[r4], ec);
+      if (!fixed) return null;
+      for (var q2 = 0; q2 < plan.rsBlocks[r4].dataCount; q2++) data.push(fixed[q2]);
+    }
+    return parsePayload(data, layout.version);
+  }
+
+  // ------------------------------- pipelines ----------------------------------
+  // A pipeline turns a url and a drawing into a module matrix. Two are built in:
+  //
+  //   standard — the ordinary QR: a square grid, the finder patterns on the
+  //              corners, and a free surface in the middle that the error
+  //              budget keeps clean. Every scanner reads it.
+  //   custom   — our own layout: a circular grid with the finder patterns
+  //              inside it, so the code fills a round avatar edge to edge.
+  //              Nothing but a decoder that knows the layout reads it.
+  //
+  // registerPipeline(name, def) adds another one; fitWorkbench takes
+  // opts.pipeline (a name or a definition).
+
+  var PIPELINES = {};
+
+  function registerPipeline(name, def) {
+    def.name = name;
+    PIPELINES[name] = def;
+    return def;
+  }
+
+  function pipelineOf(spec) {
+    if (!spec) return PIPELINES.standard;
+    if (typeof spec === 'string') {
+      var p = PIPELINES[spec];
+      if (!p) throw 'unknown pipeline: ' + spec;
+      return p;
+    }
+    return spec;
+  }
+
+  registerPipeline('standard', {
+    label: 'standard QR',
+    hint: 'The ordinary QR code. Any phone camera reads it.',
+    scannable: true,
+    surface: 'squircle',
+    grid: function (url, version) { return version * 4 + 17; },
+    build: function (url, version, mask, padBytes) { return buildBase(url, version, mask, padBytes); },
+    fit: function (url, version, art, opts) { return fitWorkbench(url, version, art, opts); }
+  });
+
+  registerPipeline('custom', {
+    label: 'custom circle',
+    hint: 'Our own layout: a circular grid with the finder patterns inside it, ' +
+          'so the code fills a round avatar edge to edge. Only a decoder that ' +
+          'knows the layout reads it.',
+    scannable: false,
+    surface: 'circle',
+    layout: function (url, version) { return customLayout(version); },
+    grid: function (url, version) { return customLayout(version).G; },
+    build: function (url, version, mask, padBytes) {
+      return buildCustom(url, version, mask, padBytes, customLayout(version));
+    },
+    verify: function (modules, base) {
+      var ok = decodeCustom(modules, base.layout, base.mask) === base.url;
+      return { clean: ok, stressed: ok };
+    },
+    fit: function (url, version, art, opts) {
+      var lay = customLayout(version);
+      var plan = codePlan(version);
+      var tSum = 0;
+      for (var b = 0; b < plan.tPerBlock.length; b++) tSum += plan.tPerBlock[b];
+      var budgetCw = tSum * 0.85;
+      // the drawing may not reach the finder patterns
+      var cap = Math.max(2, lay.dFind - 5);
+      // the same budget rules as the standard pipeline: codewords overall,
+      // and no single RS block over its share
+      var base = null;
+      try { base = buildCustom(url, version, 0, null, lay); } catch (e) { base = null; }
+      var R = surfaceRadiusForBudget(base, 'circle', budgetCw, 0.95, cap, lay.G);
+      var o = {};
+      for (var k in opts) o[k] = opts[k];
+      o.surface = surfaceAt('circle', R, lay.G, { func: lay.func });
+      o.surfaceCap = cap;
+      o.build = function (u, v, m, pads) { return buildCustom(u, v, m, pads, lay); };
+      o.verify = this.verify;
+      o.cacheKey = 'custom';
+      return fitWorkbench(url, version, art, o);
+    }
+  });
+
   /** SVG export of a final module matrix (style-aware). */
-  function toSVG(modules, n, box, border, style) {
+  function toSVG(modules, n, box, border, style, opts) {
     box = box || 12; border = border || 4;
     style = style || 'square';
+    opts = opts || {};
     var size = (n + 2 * border) * box;
     var parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
                  '" viewBox="0 0 ' + size + ' ' + size + '"' +
                  (style === 'square' ? ' shape-rendering="crispEdges"' : '') + '>',
                  '<rect width="' + size + '" height="' + size + '" fill="#fff"/>'];
     var defs = [];
+    var finders = opts.finders || [{ x: 0, y: 0 }, { x: n - 7, y: 0 }, { x: 0, y: n - 7 }];
     var inFinder = function (x, y) {
-      return (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7);
+      for (var fi = 0; fi < finders.length; fi++) {
+        var f = finders[fi];
+        if (x >= f.x && x < f.x + 7 && y >= f.y && y < f.y + 7) return true;
+      }
+      return false;
     };
     var leafPathD = function (cx, cy, h, r) {
       return 'M ' + (cx - h) + ' ' + (cy - h + r) +
@@ -1216,8 +1996,9 @@
       }
     }
     if (style !== 'square') {
-      var zones = [[0, 0], [n - 7, 0], [0, n - 7]];
-      for (var f = 0; f < 3; f++) {
+      var zones = [];
+      for (var z = 0; z < finders.length; z++) zones.push([finders[z].x, finders[z].y]);
+      for (var f = 0; f < zones.length; f++) {
         var zx2 = (zones[f][0] + border) * box, zy2 = (zones[f][1] + border) * box;
         var cx2 = zx2 + 3.5 * box, cy2 = zy2 + 3.5 * box;
         // clip the eye to its 7x7 finder zone — same as the raster engine, so
@@ -1300,7 +2081,18 @@
     fitWorkbench: fitWorkbench,
     manualFit: manualFit,
     squircleDist: squircleDist,
-    canvasWidth: canvasWidth,
+    surfaceHas: surfaceHas,
+    surfaceCells: surfaceCells,
+    surfaceWidth: surfaceWidth,
+    surfaceCap: surfaceCap,
+    surfaceAt: surfaceAt,
+    surfaceRadiusFor: surfaceRadiusFor,
+    surfaceOf: surfaceOf,
+    SURFACE_KINDS: SURFACE_KINDS,
+    SURFACE_LABELS: SURFACE_LABELS,
+    MIN_VERSION: MIN_VERSION,
+    MAX_VERSION: MAX_VERSION,
+    ALIGN_POS: ALIGN_POS,
     planFlips: planFlips,
     applyPlan: applyPlan,
     optimizeEncoding: optimizeEncoding,
@@ -1308,6 +2100,19 @@
     blurRGBA: blurRGBA,
     decodeRGBA: decodeRGBA,
     verify: verify,
+    renderRoundRGBA: renderRoundRGBA,
+    renderDiscRGBA: renderDiscRGBA,
+    roundLayout: roundLayout,
+    roundAvatarBox: roundAvatarBox,
+    customLayout: customLayout,
+    buildCustom: buildCustom,
+    decodeCustom: decodeCustom,
+    discCells: discCells,
+    rsDecode: rsDecode,
+    parsePayload: parsePayload,
+    PIPELINES: PIPELINES,
+    registerPipeline: registerPipeline,
+    pipelineOf: pipelineOf,
     autoTune: autoTune,
     realizedInk: realizedInk,
     scoreMask: scoreMask,

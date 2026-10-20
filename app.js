@@ -1,6 +1,14 @@
 /**
  * PixelQR app — pixel art ⇄ QR editor.
  * Core engine: core.js (PixelQR). Decoder: lib/jsQR.js. Encoder: lib/qrcode.js.
+ *
+ * Two pipelines (core.js):
+ *   standard — an ordinary QR code. Any phone camera reads it. The free
+ *              surface (the area you may paint, kept free of random code
+ *              cells) comes in three shapes and is sized by the error budget.
+ *   custom   — our own layout: a circular grid with the finder patterns inside
+ *              it, so the code fills a round avatar edge to edge. It decodes
+ *              with the engine's own decoder, not with a phone camera.
  */
 (function () {
   'use strict';
@@ -10,12 +18,14 @@
   var PREVIEW_BOX = 12;   // preview module size (px)
 
   var state = {
+    pipeline: 'standard',                    // standard | custom
     version: 6,                              // default: the biggest canvas, most room to draw
     mask: 'auto',
     brush: 1,                                // 1 = ink, 0 = erase
     style: 'dots',                           // render style: square | rounded | dots
+    surface: 'squircle',                     // the shape of the free area
     url: 'https://USER.github.io',
-    artRows: reframeRows(P.TEMPLATE_ROWS.CAT, 6 * 4 + 17),  // v6 canvas (n = version * 4 + 17)
+    artRows: null,                           // set on boot, once the grid size is known
     result: null,
     error: null
   };
@@ -26,7 +36,24 @@
   // ---------------- helpers ----------------
 
   function $(sel) { return document.querySelector(sel); }
-  function n() { return state.version * 4 + 17; }
+  function pipe() { return P.PIPELINES[state.pipeline] || P.PIPELINES.standard; }
+
+  /** The editor grid: a square for the standard pipeline, a disc's box for ours. */
+  function n() {
+    return pipe().grid(state.url, state.version);
+  }
+
+  /** The finder patterns of the current pipeline (for the styled renders). */
+  function findersOf(result) {
+    if (result && result.base && result.base.layout) {
+      var lay = result.base.layout, out = [];
+      for (var i = 0; i < lay.finders.length; i++) {
+        out.push({ x: lay.finders[i].x - 3, y: lay.finders[i].y - 3 });
+      }
+      return out;
+    }
+    return null;
+  }
 
   function pushUndo() {
     undoStack.push(state.artRows.slice());
@@ -81,13 +108,16 @@
     return { w: x1 - x0 + 1, h: y1 - y0 + 1 };
   }
 
-  /** Version labels show the canvas each version would give for this link. */
+  /** Version labels show the surface each version would give for this link. */
   function updateVersionLabels() {
+    var custom = state.pipeline === 'custom';
     Array.prototype.forEach.call($('#version').options, function (opt) {
       var v = parseInt(opt.value, 10);
-      var sh = P.canvasShape(state.url, v);
-      opt.textContent = 'v' + v + ' · ' + (v * 4 + 17) + '×' + (v * 4 + 17) +
-        ' · canvas ' + sh.width + '×' + sh.width;
+      var sh = P.canvasShape(state.url, v, { surface: state.surface });
+      var grid = custom ? P.PIPELINES.custom.grid(state.url, v) : (v * 4 + 17);
+      // the estimate is deliberately conservative — the fit grows it
+      opt.textContent = 'v' + v + ' · ' + grid + '×' + grid +
+        ' · free ~' + sh.width + '×' + sh.width;
     });
   }
 
@@ -96,14 +126,25 @@
    * square (crisp), rounded (soft tiles), dots — styled variants redraw the
    * three finders as rounded rings. The editor panel keeps plain squares.
    */
-  function drawMatrix(ctx, modules, size, box, border, offX, offY, style) {
+  function drawMatrix(ctx, modules, size, box, border, offX, offY, style, finders, mask, bg) {
     style = style || 'square';
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = bg || 'white';
     ctx.fillRect(offX, offY, (size + 2 * border) * box, (size + 2 * border) * box);
+    if (mask) {
+      // the code is a disc: paint it white so the modules read on it
+      ctx.fillStyle = 'white';
+      for (var my = 0; my < size; my++) {
+        for (var mx = 0; mx < size; mx++) {
+          if (!mask[my * size + mx]) continue;
+          ctx.fillRect(offX + (mx + border) * box, offY + (my + border) * box, box, box);
+        }
+      }
+    }
     ctx.fillStyle = 'black';
     if (style === 'square') {
       for (var y0 = 0; y0 < size; y0++) {
         for (var x0 = 0; x0 < size; x0++) {
+          if (mask && !mask[y0 * size + x0]) continue;
           if (modules[y0 * size + x0]) {
             ctx.fillRect(offX + (x0 + border) * box, offY + (y0 + border) * box, box, box);
           }
@@ -111,8 +152,13 @@
       }
       return;
     }
+    var zones = finders || [{ x: 0, y: 0 }, { x: size - 7, y: 0 }, { x: 0, y: size - 7 }];
     var inFinder = function (x, y) {
-      return (x < 7 && y < 7) || (x >= size - 7 && y < 7) || (x < 7 && y >= size - 7);
+      for (var fi = 0; fi < zones.length; fi++) {
+        var f = zones[fi];
+        if (x >= f.x && x < f.x + 7 && y >= f.y && y < f.y + 7) return true;
+      }
+      return false;
     };
     var canRound = typeof ctx.roundRect === 'function';
     if (!canRound && style === 'rounded') style = 'dots'; // unknown/legacy fallback only
@@ -152,6 +198,7 @@
     };
     for (var y = 0; y < size; y++) {
       for (var x = 0; x < size; x++) {
+        if (mask && !mask[y * size + x]) continue;
         if (!modules[y * size + x] || inFinder(x, y)) continue;
         var px = offX + (x + border) * box, py = offY + (y + border) * box;
         var cx2 = px + box / 2, cy2 = py + box / 2;
@@ -181,9 +228,8 @@
         ctx.fill();
       }
     }
-    var zones = [[0, 0], [size - 7, 0], [0, size - 7]];
-    for (var f = 0; f < 3; f++) {
-      var zx = offX + (zones[f][0] + border) * box, zy = offY + (zones[f][1] + border) * box;
+    for (var f = 0; f < zones.length; f++) {
+      var zx = offX + (zones[f].x + border) * box, zy = offY + (zones[f].y + border) * box;
       ctx.fillStyle = 'white';
       ctx.fillRect(zx, zy, 7 * box, 7 * box);
       ctx.fillStyle = 'black';
@@ -247,27 +293,30 @@
       var art = P.artFromRows(state.artRows);
       var prev = state.result;
       var sameCode = prev && prev.url === state.url && prev.version === state.version &&
-        prev.maskChoice === state.mask;
-      var w = P.fitWorkbench(state.url, state.version, art, {
+        prev.maskChoice === state.mask && prev.pipeline === state.pipeline &&
+        prev.surface === state.surface;
+      var w = pipe().fit(state.url, state.version, art, {
         mask: state.mask === 'auto' ? 'auto' : state.mask,
         style: state.style,
         margin: 1.0,
-        // strokes re-use the established encoding + canvas (fast, stable while painting)
+        surface: state.surface,
+        // strokes re-use the established encoding + surface (fast, stable while painting)
         reuse: sameCode ? { mask: prev.mask, suffix: prev.suffix } : null,
         canvasR: sameCode ? prev.canvas.R : undefined
       });
       state.result = {
         base: w.fit.base, t: w.t, mask: w.fit.mask, suffix: w.fit.suffix,
         pad: w.fit.pad || null, canvas: w.canvas, residual: w.residual,
-        url: state.url, version: state.version, maskChoice: state.mask
+        url: state.url, version: state.version, maskChoice: state.mask,
+        pipeline: state.pipeline, surface: state.surface
       };
     } catch (e) {
       state.result = null;
       state.error = (typeof e === 'string') ? e : (e && e.message) || 'QR build failed';
     }
-    if (labeledUrl !== state.url) {
+    if (labeledUrl !== state.url || labeledUrl !== state.pipeline + state.surface) {
       updateVersionLabels();
-      labeledUrl = state.url;
+      labeledUrl = state.url + state.pipeline + state.surface;
     }
     drawEditor();
     drawPreview();
@@ -275,6 +324,19 @@
   }
 
   // ---------------- editor ----------------
+
+  /** Is this cell inside the free surface? */
+  function inSurface(result, x, y, size) {
+    if (!result || !result.canvas) return true;
+    return P.surfaceHas(result.canvas.kind, result.canvas.R, x, y, size);
+  }
+
+  /** Is this cell part of the code at all? (the custom layout is a disc) */
+  function inCode(result, x, y, size) {
+    if (!result || !result.base || !result.base.layout) return true;
+    var lay = result.base.layout;
+    return !!lay.inDisc[y * size + x];
+  }
 
   function drawEditor() {
     var canvasEl = $('#editor');
@@ -284,15 +346,15 @@
     ctx.fillStyle = '#14141b';
     ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
 
-    var func = P.buildFunctionMask(state.version);
     var result = state.result;
-    var canR = result && result.canvas ? result.canvas.R : null;
+    var func = result && result.base ? result.base.func : P.buildFunctionMask(state.version);
     for (var y = 0; y < size; y++) {
       for (var x = 0; x < size; x++) {
         var i = y * size + x;
         var px = x * CELL, py = y * CELL;
         var ch = state.artRows[y][x];
-        var outside = canR !== null && P.squircleDist(x, y, size) > canR;
+        if (!inCode(result, x, y, size)) continue; // outside the disc
+        var outside = !inSurface(result, x, y, size);
         if (func[i]) {
           if (result) {
             // Fixed QR skeleton (finders, timing, alignment, format cells).
@@ -336,8 +398,8 @@
             ctx.stroke();
           }
         } else {
-          // Writable canvas. (Leftover ink that ended up outside after a
-          // version/canvas change is shown too — red-dotted, ready to erase.)
+          // Writable surface. (Leftover ink that ended up outside after a
+          // version/surface change is shown too — red-dotted, ready to erase.)
           ctx.fillStyle = ch === '#' ? '#000' : '#fff';
           ctx.fillRect(px, py, CELL, CELL);
           if (ch === '#' && result && (!result.t.modules[i] || outside)) {
@@ -356,25 +418,26 @@
       ctx.moveTo(0, g * CELL + 0.5); ctx.lineTo(size * CELL, g * CELL + 0.5);
     }
     ctx.stroke();
-    // writable-canvas boundary (drawn along the cell edges between the
-    // canvas and the code ring)
-    if (canR !== null && result) {
+    // the surface boundary (drawn along the cell edges between the surface
+    // and the code ring)
+    if (result && result.canvas) {
+      var kind = result.canvas.kind, R = result.canvas.R;
       ctx.strokeStyle = 'rgba(110, 231, 183, 0.6)';
       ctx.lineWidth = 3;
       ctx.beginPath();
       for (var yy = 0; yy < size; yy++) {
         for (var xx = 0; xx < size; xx++) {
-          if (P.squircleDist(xx, yy, size) > canR) continue;
-          if (yy === 0 || P.squircleDist(xx, yy - 1, size) > canR) {
+          if (!P.surfaceHas(kind, R, xx, yy, size)) continue;
+          if (yy === 0 || !P.surfaceHas(kind, R, xx, yy - 1, size)) {
             ctx.moveTo(xx * CELL, yy * CELL + 1.5); ctx.lineTo((xx + 1) * CELL, yy * CELL + 1.5);
           }
-          if (yy === size - 1 || P.squircleDist(xx, yy + 1, size) > canR) {
+          if (yy === size - 1 || !P.surfaceHas(kind, R, xx, yy + 1, size)) {
             ctx.moveTo(xx * CELL, (yy + 1) * CELL - 1.5); ctx.lineTo((xx + 1) * CELL, (yy + 1) * CELL - 1.5);
           }
-          if (xx === 0 || P.squircleDist(xx - 1, yy, size) > canR) {
+          if (xx === 0 || !P.surfaceHas(kind, R, xx - 1, yy, size)) {
             ctx.moveTo(xx * CELL + 1.5, yy * CELL); ctx.lineTo(xx * CELL + 1.5, (yy + 1) * CELL);
           }
-          if (xx === size - 1 || P.squircleDist(xx + 1, yy, size) > canR) {
+          if (xx === size - 1 || !P.surfaceHas(kind, R, xx + 1, yy, size)) {
             ctx.moveTo((xx + 1) * CELL - 1.5, yy * CELL); ctx.lineTo((xx + 1) * CELL - 1.5, (yy + 1) * CELL);
           }
         }
@@ -397,12 +460,13 @@
     var c = cellFromEvent(evt);
     if (!c) return;
     var size = n();
-    var func = P.buildFunctionMask(state.version);
-    if (func[c.y * size + c.x]) return; // locked skeleton
-    var ch = forced !== undefined ? forced : (state.brush === 1 ? '#' : '.');
     var res = state.result;
-    if (ch === '#' && res && res.canvas && P.squircleDist(c.x, c.y, size) > res.canvas.R) {
-      return; // the writable canvas is the design area — the ring stays code
+    var func = res && res.base ? res.base.func : P.buildFunctionMask(state.version);
+    if (func[c.y * size + c.x]) return; // locked skeleton
+    if (!inCode(res, c.x, c.y, size)) return; // outside the disc
+    var ch = forced !== undefined ? forced : (state.brush === 1 ? '#' : '.');
+    if (ch === '#' && !inSurface(res, c.x, c.y, size)) {
+      return; // the free surface is the design area — the ring stays code
     }
     var row = state.artRows[c.y];
     if (row[c.x] !== ch) {
@@ -442,7 +506,18 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       return;
     }
-    drawMatrix(ctx, state.result.t.modules, size, PREVIEW_BOX, 4, 0, 0, state.style);
+    // the custom layout is a disc: the cells outside it are not code, so the
+    // preview shows the round shape on the panel, not a white square
+    var custom = state.pipeline === 'custom';
+    drawMatrix(ctx, state.result.t.modules, size, PREVIEW_BOX, 4, 0, 0, state.style,
+      findersOf(state.result), custom ? discMask() : null, custom ? '#14141b' : 'white');
+  }
+
+  /** The cells that are part of the code (the custom layout is a disc). */
+  function discMask() {
+    var res = state.result;
+    if (!res || !res.base || !res.base.layout) return null;
+    return res.base.layout.inDisc;
   }
 
   function updateStatus() {
@@ -459,13 +534,14 @@
     var base = state.result.base;
     var res = state.result.residual || { bg: 0, ink: 0 };
     var can = state.result.canvas;
+    var custom = state.pipeline === 'custom';
     if (t.verified) {
       badge.classList.add('ok');
       badge.textContent = t.iterations > 1
-        ? '✓ Scannable (auto-tuned)'
-        : '✓ Scannable — clean & at distance';
+        ? '✓ Decodes (auto-tuned)'
+        : (custom ? '✓ Decodes — clean' : '✓ Scannable — clean & at distance');
       var parts = [
-        'canvas ' + can.width + '×' + can.width +
+        'surface ' + can.width + '×' + can.width +
           (res.bg === 0 ? ' — zero random cells inside' : ' — ' + res.bg + ' stray cells left'),
         res.ink === 0 ? 'all ink realized' : res.ink + ' ink cells unrealized',
         t.cwUsed + '/' + t.cwBudget + ' codewords sacrificed'
@@ -474,16 +550,18 @@
       if (state.result.pad && state.result.pad.fixed > 0) {
         parts.push(state.result.pad.fixed + ' cells fixed by free payload bits');
       }
-      parts.push('decode-verified at 296px + 148px blurred, as rendered');
+      parts.push(custom
+        ? 'decoded by the engine’s own Reed-Solomon decoder'
+        : 'decode-verified at 296px + 148px blurred, as rendered');
       detail.textContent = parts.join(' · ');
     } else {
       badge.classList.add('bad');
       badge.textContent = '✗ Not decodable with this art';
-      detail.textContent = 'Too many conflicting paints — erase some strokes or switch to a higher version (bigger canvas).';
+      detail.textContent = 'Too many conflicting paints — erase some strokes or switch to a higher version (bigger surface).';
     }
     $('#stats').textContent = 'v' + base.version + ' · ' + n() + '×' + n() + ' modules · mask ' +
-      state.result.mask + ' · ' + state.style + ' style · canvas ' + can.width + '×' + can.width +
-      ' · ' + base.drawable + ' drawable cells';
+      state.result.mask + ' · ' + state.style + ' style · ' + can.kind + ' surface · ' +
+      can.width + '×' + can.width + ' free · ' + base.drawable + ' drawable cells';
   }
 
   // ---------------- exports ----------------
@@ -503,37 +581,37 @@
     var size = n();
     var c = document.createElement('canvas');
     c.width = c.height = (size + 8) * box;
-    drawMatrix(c.getContext('2d'), state.result.t.modules, size, box, 4, 0, 0, state.style);
+    var custom = state.pipeline === 'custom';
+    drawMatrix(c.getContext('2d'), state.result.t.modules, size, box, 4, 0, 0, state.style,
+      findersOf(state.result), custom ? discMask() : null, custom ? '#ffffff' : 'white');
     return c;
   }
 
-  function avatarCanvas() {
-    var size = n();
-    var c = document.createElement('canvas');
-    c.width = c.height = 1024;
-    var ctx = c.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, 1024, 1024);
-    var target = Math.round(1024 * 0.578);
-    var box = Math.max(1, Math.floor(target / (size + 8)));
-    var side = box * (size + 8);
-    var off = Math.round((1024 - side) / 2);
-    drawMatrix(ctx, state.result.t.modules, size, box, 4, off, off, state.style);
-    return c;
-  }
-
-  function avatarPreviewCanvas(sizePx) {
+  /**
+   * The round avatar: the code inside a circle, with the finder patterns
+   * clear of the rim. Standard — the QR square is inscribed in the circle.
+   * Custom — the disc fills it edge to edge.
+   */
+  function avatarCanvas(sizePx) {
     var c = document.createElement('canvas');
     c.width = c.height = sizePx;
     var ctx = c.getContext('2d');
-    ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(0, 0, sizePx, sizePx);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(sizePx / 2, sizePx / 2, sizePx / 2 - 1, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(avatarCanvas(), 0, 0, sizePx, sizePx);
-    ctx.restore();
+    var res = state.result;
+    var img;
+    if (state.pipeline === 'custom') {
+      img = P.renderDiscRGBA(res.t.modules, res.base.n, res.base.layout, sizePx, state.style);
+    } else {
+      // the largest module size that still decodes after the circular crop
+      var box = P.roundAvatarBox(res.t.modules, res.base.n, sizePx, state.style, {
+        url: res.base.url, finders: findersOf(res)
+      });
+      img = P.renderRoundRGBA(res.t.modules, res.base.n, sizePx, state.style, {
+        box: box, finders: findersOf(res)
+      });
+    }
+    var out = ctx.createImageData(sizePx, sizePx);
+    out.data.set(img.data);
+    ctx.putImageData(out, 0, 0);
     return c;
   }
 
@@ -579,14 +657,42 @@
       });
     });
 
+    // The pipeline: standard QR, or our own circular layout.
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pipeline]'), function (btn) {
+      btn.addEventListener('click', function () {
+        state.pipeline = btn.getAttribute('data-pipeline');
+        Array.prototype.forEach.call(document.querySelectorAll('[data-pipeline]'), function (b) {
+          b.classList.toggle('active', b === btn);
+        });
+        var custom = state.pipeline === 'custom';
+        $('#surface-group').classList.toggle('hidden', custom);
+        $('#pipeline-hint').textContent = custom
+          ? P.PIPELINES.custom.hint
+          : P.PIPELINES.standard.hint;
+        state.artRows = reframeRows(state.artRows, n());
+        refresh(true);
+      });
+    });
+
+    // The shape of the free surface (standard pipeline only).
+    Array.prototype.forEach.call(document.querySelectorAll('[data-surface]'), function (btn) {
+      btn.addEventListener('click', function () {
+        state.surface = btn.getAttribute('data-surface');
+        Array.prototype.forEach.call(document.querySelectorAll('[data-surface]'), function (b) {
+          b.classList.toggle('active', b === btn);
+        });
+        refresh(true);
+      });
+    });
+
     Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (btn) {
       btn.addEventListener('click', function () {
         var rows = P.TEMPLATE_ROWS[btn.getAttribute('data-preset')];
         var bb = artBBox(rows);
         var need = Math.max(bb.w, bb.h) + 2;
-        // auto-fit: bump the version until the canvas can hold the template
-        for (var v = state.version; v <= 6; v++) {
-          if (P.canvasShape(state.url, v).width >= need) {
+        // auto-fit: bump the version until the surface can hold the template
+        for (var v = state.version; v <= P.MAX_VERSION; v++) {
+          if (P.canvasShape(state.url, v, { surface: state.surface }).width >= need) {
             if (v !== state.version) {
               state.version = v;
               $('#version').value = String(v);
@@ -618,10 +724,10 @@
       if (!file) return;
       var img = new Image();
       img.onload = function () {
-        // Downsample the image into the writable canvas (clipped to its shape)
+        // Downsample the image into the free surface (clipped to its shape)
         var size = n();
         var sh = state.result && state.result.canvas
-          ? state.result.canvas : P.canvasShape(state.url, state.version);
+          ? state.result.canvas : P.canvasShape(state.url, state.version, { surface: state.surface });
         var cw = sh.width;
         var c = document.createElement('canvas');
         c.width = c.height = cw;
@@ -631,7 +737,8 @@
         ctx.drawImage(img, (cw - w) / 2, (cw - h) / 2, w, h);
         var data = ctx.getImageData(0, 0, cw, cw).data;
         var off = Math.floor((size - cw) / 2);
-        var func = P.buildFunctionMask(state.version);
+        var func = state.result && state.result.base
+          ? state.result.base.func : P.buildFunctionMask(state.version);
         var blankRow = '.'.repeat(size);
         var rows = [];
         for (var y = 0; y < size; y++) rows.push(blankRow);
@@ -640,7 +747,7 @@
           for (var xx = 0; xx < cw; xx++) {
             var gx = off + xx, gy = off + yy;
             if (func[gy * size + gx]) continue; // locked skeleton
-            if (P.squircleDist(gx, gy, size) > sh.R) continue; // outside the canvas
+            if (!P.surfaceHas(sh.kind, sh.R, gx, gy, size)) continue; // outside the surface
             if (data[(yy * cw + xx) * 4] < 140) row[gx] = '#';
           }
           rows[off + yy] = row.join('');
@@ -658,23 +765,28 @@
     });
     $('#dl-svg').addEventListener('click', function () {
       if (!state.result) return;
-      var svg = P.toSVG(state.result.t.modules, n(), 12, 4, state.style);
+      var svg = P.toSVG(state.result.t.modules, n(), 12, 4, state.style, { finders: findersOf(state.result) });
       download(new Blob([svg], { type: 'image/svg+xml' }), 'pixelqr.svg');
     });
     $('#dl-avatar').addEventListener('click', function () {
-      if (state.result) download(avatarCanvas(), 'avatar_1024.png');
+      if (state.result) download(avatarCanvas(1024), 'avatar_1024.png');
     });
     $('#dl-avatar-preview').addEventListener('click', function () {
-      if (state.result) download(avatarPreviewCanvas(260), 'avatar_preview_260.png');
+      if (state.result) download(avatarCanvas(260), 'avatar_preview_260.png');
     });
   }
 
   // ---------------- boot ----------------
 
-  wireEditor();
-  wireControls();
-  updateVersionLabels();
-  refresh(true);
+  function boot() {
+    state.artRows = reframeRows(P.TEMPLATE_ROWS.CAT, n());
+    wireEditor();
+    wireControls();
+    updateVersionLabels();
+    refresh(true);
+  }
+
+  boot();
 
   // expose for console play + tests
   window.PixelQRApp = { state: state, refresh: refresh, recompute: recompute, undo: undo };

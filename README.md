@@ -22,24 +22,33 @@ Verify the engine headlessly:
 
 ```sh
 node test/verify.js
+node test/pipeline.js
 ```
 
 ## What it does
 
-- **Draw** on a module grid (33×33 at v4 default) inside the **writable canvas** —
-  a rounded-square region (dashed outline) whose size is derived from the code's
-  error budget. Everything inside is guaranteed clean: **zero random code
-  cells, ever**. The fog of QR noise is pushed outside, into the hatched ring.
-- **Ink or erase** — every cell of the canvas is pinned: ink wants dark,
+- **Two backends.** *Standard* is an ordinary QR code — any phone camera reads
+  it. *Custom* is our own layout: a circular grid with the finder patterns
+  inside it, so the code fills a round profile picture edge to edge. It reads
+  with the engine's own decoder, not with a phone camera.
+- **Draw** on a module grid inside the **free surface** — a region (dashed
+  outline) whose size is derived from the code's error budget. Everything
+  inside is guaranteed clean: **zero random code cells, ever**. The fog of QR
+  noise is pushed outside, into the hatched ring.
+- **The surface's shape is yours**: a rounded square, a circle (the round
+  profile picture) or a cross reaching to the code's edges.
+- **Ink or erase** — every cell of the surface is pinned: ink wants dark,
   background wants light, and the engine spends its budget pinning both. What
   you paint is what scans.
-- **The code ring** — the hatched zone around the canvas carries the QR's own
+- **The code ring** — the hatched zone around the surface carries the QR's own
   random cells (plus finder/timing skeleton). That randomness is what makes
   each link unique; it never mixes with your art.
 - **Free payload bits** — on top of the flip budget, the pad codewords after
   the payload terminator (bits decoders never read) are *solved* with linear
-  algebra to pin more canvas cells exactly, for free (v3: 16 bits, v4: 96,
-  v5: 176). No scan margin spent.
+  algebra to pin more surface cells exactly, for free. No scan margin spent.
+- **Versions 2–13** (25–69 modules). Every version buys a bigger error budget,
+  and a bigger budget buys a bigger free surface: ~17×17 cells at v4, ~23×23
+  at v6, ~35×35 at v10 for a 22-character link.
 - **Styles** — `square`, `dots` (tangent circles), `squircle` (soft-square
   superellipse), `hexagon` (honeycomb tiles + hexagon eyes), `leaf`
   (interlocking petals + leaf-shaped eyes) and `diamond` (diagonal lattice).
@@ -47,14 +56,29 @@ node test/verify.js
   has a natural ring shape, the three finder eyes wear it too. Every style is
   verified by decoding the styled render itself.
 - **Red dots** mark drawn ink the budget couldn't realize: switch to a higher
-  version (bigger canvas) or erase that bit.
+  version (bigger surface) or erase that bit.
 - **Undo** (Ctrl/Cmd+Z or the button) steps back through edits.
 - **Live verification**: after every edit the code is decoded in-browser with a
   real QR decoder (jsQR), both crisp and shrunk+blurred (simulating scanning at
   a distance). The badge shows the result. If decoding fails, the flip budget
   is automatically trimmed until it passes.
-- **Export**: QR PNG, SVG, a 1024px avatar (centered, quiet-zone safe,
-  circle-crop-safe), and a circular avatar preview.
+- **Export**: QR PNG, SVG, a 1024px round avatar, and a round avatar preview.
+
+## Round profile pictures
+
+A profile picture is a circle, and a circle has no corners: the three finder
+patterns of a square QR sit exactly where a circular crop would eat them. So
+there are two answers, one per backend:
+
+- **Standard** — the QR square is *inscribed* in the circle, so all three eyes
+  are inside it and the circle itself is the quiet zone. Any phone reads it.
+  The export checks the render with a real decoder and steps the module size
+  down if a styled render happens to lose a finder at that scale.
+- **Custom** — the grid is a disc and the eyes sit inside it, 120° apart, so
+  the code fills the circle edge to edge. The payload, the Reed-Solomon coding,
+  the interleaving and the mask are all the standard ones; only the *layout* is
+  ours, which means it is not a standard QR: only a decoder that knows the
+  layout reads it.
 
 ## How it works
 
@@ -62,33 +86,36 @@ A QR code at error-correction level H survives up to ~30% damage — that's a
 budget, and PixelQR spends it to carve out one region of the code that becomes
 **fully yours**.
 
-1. **Writable canvas** — the design area is a rounded-square *squircle*
-   (`max(|dx|,|dy|) + 0.35·min(|dx|,|dy|)`) around the middle. Inside it,
+1. **The free surface** — the design area is a region of your choosing: a
+   rounded-square *squircle*
+   (`max(|dx|,|dy|) + 0.35·min(|dx|,|dy|)`), a circle, or a cross. Inside it,
    every cell is pinned to the drawing (ink → dark, rest → light) at high
    weight; outside, background cells keep the QR's own randomness (weight
-   floor) — the two never trade off. Painting is restricted to the canvas;
+   floor) — the two never trade off. Painting is restricted to the surface;
    the ring is code.
-2. **Canvas sizing from the budget** — each sacrificed codeword pins ~7 of
-   its canvas cells, each free pad bit patches ~0.55 more, so
-   `cells ≈ (t·7 + padBits·0.55)·0.88`. That yields ~13×13 cells at v3,
-   ~17–19×17–19 at v4, ~19×19 at v5, ~23×23 at v6 for a 22-char link —
-   and a shorter link buys more (more free pad bits).
+2. **Surface sizing from the budget** — the unit of error correction is the
+   **codeword**: eight modules along the placement walk. A codeword may be
+   sacrificed once per RS block, and the placement walk hands codewords out in
+   runs, so the surface's codewords are *not* spread evenly over the blocks —
+   the tightest block decides how big the surface can be. The estimate uses
+   the real codeword counts; the grow pass then pushes the surface out in
+   quarter-cell steps while the promise still holds, so the surface ends up as
+   large as the budget genuinely allows.
 3. **The zero-residual guarantee** — after the fit, the engine counts every
-   remaining background-dark cell inside the canvas. If any survive, it tries
+   remaining background-dark cell inside the surface. If any survive, it tries
    (a) the runner-up encodings from the search at the same size, then
-   (b) a full re-search, and only as a last resort (c) shrinks the canvas one
-   step and re-runs — until the count is exactly **zero**. A canvas is never
+   (b) a full re-search, and only as a last resort (c) shrinks the surface one
+   step and re-runs — until the count is exactly **zero**. A surface is never
    reported with stray noise in it.
 4. **Pattern-fit search** — the popup pattern depends on the payload and the
    mask. The app quietly tries short, harmless link fragments (`#`, `#0`…`#z`
    — anchor only, the page is unchanged) × all 8 masks, and keeps the encoding
    whose free cells fit the drawing best. ~30–40 ms; strokes reuse the
    established encoding (~25 ms).
-5. **Codeword sacrifice** — every 8 modules along the placement walk form one
-   **codeword**, the unit of error correction. Flipping the codeword's bits
-   still costs the decoder only *one* error, so the engine ranks codewords by
-   conflict mass (ink cells weighted 3×) and sacrifices whole codewords within
-   each RS block's error capacity.
+5. **Codeword sacrifice** — flipping a codeword's bits still costs the decoder
+   only *one* error, so the engine ranks codewords by conflict mass (ink cells
+   weighted 3×) and sacrifices whole codewords within each RS block's error
+   capacity.
 6. **Payload freedom (free cells)** — after the payload terminator the
    encoder writes padding codewords (EC/11) that **decoders never read**
    (ISO/IEC 18004: "pad codewords shall have no significance") — but they do
@@ -99,7 +126,7 @@ budget, and PixelQR spends it to carve out one region of the code that becomes
    to `padBits` target modules exactly — zero error budget spent, decoded
    payload byte-for-byte intact. This is the same family of trick as
    QArt/QArtText codes; the decoded link is unchanged.
-7. The 7 *remainder bits* (v2–6) carry no data — always free to paint.
+7. The 7 *remainder bits* (v2–13) carry no data — always free to paint.
 8. **Styled rendering** — dots or rounded tiles with rounded finder rings,
    with decode verification applied to the rendered style (crisp, blurred and
    downscaled). Tangent dots (diameter = 1 module) were chosen after probing
@@ -109,23 +136,44 @@ budget, and PixelQR spends it to carve out one region of the code that becomes
 10. Result is verified by decoding (crisp + stressed). Auto-trim on failure.
 
 With the workbench model a cat at v4 lands with **100% of its ink realized**
-inside a canvas that is **100% free of random cells**, and still decodes after
+inside a surface that is **100% free of random cells**, and still decodes after
 blur and downscale. The retry/shrink loop spends its effort only when the
 budget is genuinely marginal.
+
+## The custom backend in detail
+
+The custom pipeline keeps everything that makes a QR code a QR code — the
+payload, the byte-mode encoding, the Reed-Solomon coding, the block
+interleaving, the eight masks, the placement walk, the free-pad-bit solver —
+and changes one thing: **the layout**.
+
+- The grid is a **disc**: the version's code words, plus the three finder
+  patterns, laid out on the cells nearest the centre of a square grid. The
+  disc's radius follows from the version; the finders are placed as far out as
+  they fit, 120° apart.
+- The walk is the same column-pair zigzag, restricted to the disc.
+- The engine carries its own **Reed-Solomon decoder** (syndromes,
+  Berlekamp-Massey, Chien search, Forney) to read the result back, art and all
+  — the standard pipeline gets that from jsQR instead.
+- The verification is honest: the same promise (zero random cells inside the
+  surface, every stroke realized, the payload intact) is checked with the
+  engine's own decoder.
 
 ## Controls
 
 | Control | What it does |
 |---|---|
+| Mode: standard / custom | The ordinary QR, or our own circular layout |
+| Surface: square / circle / cross | The shape of the free area |
 | Brush: ink / erase | Paint a module dark, or back to light (right-click erases too) |
 | Style: square / dots / squircle / hexagon / leaf / diamond | How the final code is rendered — every style is decode-verified as rendered (crisp, blurred, downscaled) |
 | Undo | Ctrl/Cmd+Z or the button — steps back through edits |
 | Presets: cat / smiley / heart | Load a module-resolution template |
 | Upload image | Downsample any image to the grid (dark/light threshold) |
 | Link to → | The URL the QR encodes |
-| Version | v2–v6 = 25–41 modules; each shows the canvas it would give this link (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
+| Version | v2–v13 = 25–69 modules; each shows the surface it would give this link (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
 | Mask | auto / 0–7 / shuffle — auto runs the pattern-fit search (may add a `#x` anchor fragment to the link); a fixed mask keeps your exact link |
-| PNG / SVG / Avatar 1024 / Avatar preview | Exports |
+| PNG / SVG / Avatar 1024 / Avatar preview | Exports — the avatars are the round profile picture |
 
 ## Embedding on a site (GitHub Pages)
 
@@ -148,6 +196,7 @@ lib/jsQR.js         jsQR (Apache-2.0) — in-browser decoder for live verificati
 test/verify.js      node suite: structural roundtrip + tolerance sweep
 test/pad.js         node suite: payload-freedom (linearity, solve, decode) + style decode battery
 test/canvas.js      node suite: writable-canvas sizing + zero-residual guarantee + decode battery
+test/pipeline.js    node suite: surfaces × versions, the custom backend, the round avatar
 test/styles.js      style lab: decode matrix across 7 module styles × sizes
 test/repro.js       visual check: art vs result sheet, ink-realized / contrast metrics
 test/catgen.js      cat preset workbench: builds the template, prints art vs result + metrics
@@ -183,6 +232,17 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
   size, and still zeroes (the browser path uses this).
 - **Preset auto-fit** — the smallest version whose canvas can hold the cat.
 
+`test/pipeline.js` additionally proves:
+
+- **Surfaces** — square, circle and cross all keep the promise (zero random
+  cells inside, every stroke realized, the code still decodes).
+- **The version range** — v2 to v13 all build, fit and decode; bigger versions
+  really do buy a bigger surface.
+- **The custom backend** — encodes and decodes, realizes the art, and leaves
+  the corners free of finder patterns.
+- **The round avatar** — the standard QR, inscribed in the circle, still
+  decodes after the circular crop.
+
 ## Prior art (what commercial/OSS art-QR does, and what we took)
 
 - **Halftone QR (Chu et al., SIGGRAPH Asia 2013)** — replaces each dark module
@@ -203,17 +263,21 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
 
 ## Known limits
 
-- Versions 2–6 are supported (single alignment pattern geometry).
+- Versions 2–13 are supported (the full alignment-pattern layout and the
+  version-information blocks from v7 on).
 - The encoded URL must fit the chosen version at level H (the app shows a clean
   error otherwise — raise the version).
-- The canvas is sized by physics, not preference: a bigger canvas needs a
+- The surface is sized by physics, not preference: a bigger surface needs a
   bigger error budget. For a 22-char link that means ~13×13 cells at v3,
-  ~17–19×19 at v4, ~19×19 at v5, ~23×23 at v6. Shorter links grow the canvas
-  (more free pad bits).
+  ~17×17 at v4, ~19×19 at v5, ~23×23 at v6, ~35×35 at v10. Shorter links grow
+  the surface (more free pad bits).
+- The custom backend is **not a standard QR**. It is a QR-shaped code with our
+  own layout: a phone camera will not read it. Use it when the shape matters
+  more than the compatibility.
 - Very small renders (≤40px) are intentionally unscannable — that's the
   intrigue effect when used as an avatar.
-- The ring around the canvas is genuinely random (that's the code); it is
-  never paintable, and it never reaches inside the canvas. The visual calm at
+- The ring around the surface is genuinely random (that's the code); it is
+  never paintable, and it never reaches inside the surface. The visual calm at
   small sizes comes from the styling (dots/rounded) on top.
 - Style safety was tuned against jsQR (see `test/styles.js`): the six shipped
   styles — square, dots, squircle, hexagon, leaf, diamond — decode clean from

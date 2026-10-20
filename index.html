@@ -30,6 +30,17 @@
     </div>
 
     <div class="tools">
+      <div class="group" role="group" aria-label="Pipeline">
+        <span class="group-label">Mode</span>
+        <button class="chip active" data-pipeline="standard" title="An ordinary QR code — any phone camera reads it">standard</button>
+        <button class="chip" data-pipeline="custom" title="Our own circular layout — fills a round avatar edge to edge">custom</button>
+      </div>
+      <div class="group" role="group" aria-label="Surface" id="surface-group">
+        <span class="group-label">Surface</span>
+        <button class="chip active" data-surface="squircle" title="A rounded square in the middle">square</button>
+        <button class="chip" data-surface="circle" title="A circle — the round profile picture">circle</button>
+        <button class="chip" data-surface="cross" title="A cross reaching to the code's edges">cross</button>
+      </div>
       <div class="group" role="group" aria-label="Brush">
         <span class="group-label">Brush</span>
         <button class="chip brush active" data-brush="1" title="Paint ink">●&nbsp;ink</button>
@@ -60,12 +71,13 @@
     </div>
 
     <p class="legend">
-      The dashed outline is your <b>writable canvas</b> — everything inside is guaranteed clean:
-      no random code cells, what you paint is what scans. The faint-diagonal ring around it is the
-      QR's own machine zone (plus the fixed finder/timing skeleton): the code's randomness lives
-      there, never inside your canvas. Red dots mark ink that didn't fit — switch to a higher
-      version for a bigger canvas, or erase it.
+      The dashed outline is your <b>free surface</b> — everything inside is guaranteed clean:
+      no random code cells, what you paint is what scans. The faint-diagonal ring around it is
+      the QR's own machine zone (plus the fixed finder/timing skeleton): the code's randomness lives
+      there, never inside your surface. Red dots mark ink that didn't fit — switch to a higher
+      version for a bigger surface, or erase it.
     </p>
+    <p class="legend dim" id="pipeline-hint">The ordinary QR code. Any phone camera reads it.</p>
   </section>
 
   <!-- ============ preview ============ -->
@@ -94,9 +106,16 @@
           <select id="version">
             <option value="2">v2 · 25×25</option>
             <option value="3">v3 · 29×29</option>
-            <option value="4" selected>v4 · 33×33</option>
+            <option value="4">v4 · 33×33</option>
             <option value="5">v5 · 37×37</option>
             <option value="6" selected>v6 · 41×41</option>
+            <option value="7">v7 · 45×45</option>
+            <option value="8">v8 · 49×49</option>
+            <option value="9">v9 · 53×53</option>
+            <option value="10">v10 · 57×57</option>
+            <option value="11">v11 · 61×61</option>
+            <option value="12">v12 · 65×65</option>
+            <option value="13">v13 · 69×69</option>
           </select>
         </label>
 
@@ -122,8 +141,8 @@
     <div class="downloads">
       <button class="chip dl" id="dl-qr">PNG</button>
       <button class="chip dl" id="dl-svg">SVG</button>
-      <button class="chip dl" id="dl-avatar">Avatar 1024</button>
-      <button class="chip dl" id="dl-avatar-preview">Avatar preview</button>
+      <button class="chip dl" id="dl-avatar" title="The round profile picture: the code inside a circle">Avatar 1024</button>
+      <button class="chip dl" id="dl-avatar-preview" title="The round profile picture at feed size">Avatar preview</button>
     </div>
   </section>
 </main>
@@ -135,23 +154,24 @@
       <p>
         A QR code at <b>error-correction level H</b> is built to survive up to ~30% damage — that
         tolerance is a budget, and PixelQR spends it to make one region of the code <b>fully
-        yours</b>: a writable canvas where every cell is pinned to your drawing (ink dark,
-        background light). The code's own random cells are pushed outside the canvas into the
+        yours</b>: a free surface where every cell is pinned to your drawing (ink dark,
+        background light). The code's own random cells are pushed outside it into the
         ring — they're what keeps every link unique, and they never mix with your art. What you
         paint is what scans.
       </p>
       <ul>
-        <li><b>Writable canvas</b> (dashed outline) — a rounded-square region sized from the
+        <li><b>Free surface</b> (dashed outline) — the shape you choose, sized from the
         available code budget, guaranteed to end up <b>100% free of random code cells</b>.
-        Bigger versions buy a bigger canvas (v3 ≈ 13×13 cells, v4 ≈ 17×17, v5 ≈ 19×19, v6 ≈ 23×23
-        for this link length; a shorter link buys more). If a pattern is stubborn, the canvas
-        steps one cell smaller until the guarantee holds — it never shows noise.</li>
-        <li><b>The code ring</b> — everything outside the canvas (faint diagonal) is the QR's
+        A square, a circle or a cross; bigger versions buy a bigger surface (v3 ≈ 13×13 cells,
+        v4 ≈ 17×17, v5 ≈ 19×19, v6 ≈ 23×23 for this link length; a shorter link buys more).
+        If a pattern is stubborn, the surface steps one cell smaller until the guarantee
+        holds — it never shows noise.</li>
+        <li><b>The code ring</b> — everything outside the surface (faint diagonal) is the QR's
         machine zone: finder patterns, timing, and the random data cells carrying your link plus
         the digital signatures that make it decode. Its randomness is what makes the code unique.</li>
         <li><b>Free payload bits</b> — the pad codewords after the payload terminator are never
         read by decoders. The app solves them with linear algebra (same family of trick as
-        QArt/QArtText codes) to pin another batch of canvas cells <i>exactly</i> — 16 free bits at
+        QArt/QArtText codes) to pin another batch of surface cells <i>exactly</i> — 16 free bits at
         v3, 96 at v4, 176 at v5 — spending no scan margin at all.</li>
         <li><b>Styled rendering</b> — dots or rounded tiles with rounded finders, the look
         commercial design-QR generators use to calm the noise down. Every style is verified by
@@ -159,7 +179,7 @@
         scannable version.</li>
         <li><b>Sacrificed codewords</b> — every 8 module bits form one codeword. Flipping the
         codeword's bits costs the decoder only <i>one</i> error, so each sacrificed codeword pins
-        a whole batch of canvas cells.</li>
+        a whole batch of surface cells.</li>
         <li><b>Pattern-fit search</b> — the popup pattern is determined by the link and the mask.
         The app quietly tries variant encodings and all 8 masks, then keeps the one whose free
         cells fit your drawing best (the tiny <code>#x</code> fragment it may add to your link
@@ -168,7 +188,13 @@
         a real QR decoder (jsQR), both crisp and blurred/shrunk to simulate scanning at a
         distance. If it fails, the flip budget is auto-trimmed until it passes.</li>
         <li><b>Red dots</b> in the canvas mark ink that didn't fit the budget — that's your cue
-        to switch to a higher version (bigger canvas) or simplify that area.</li>
+        to switch to a higher version (bigger surface) or simplify that area.</li>
+        <li><b>Round profile pictures</b> — a profile picture is a circle, and a circle has no
+        corners, so the three finder patterns of a square QR sit exactly where a circular crop
+        would eat them. In <b>standard</b> mode the QR is inscribed in the circle, so every eye
+        stays inside it and any phone reads it. In <b>custom</b> mode the grid is a disc and the
+        eyes sit inside it, so the code fills the circle edge to edge — at the cost of no longer
+        being a standard QR.</li>
       </ul>
       <p class="fine">
         Everything runs in your browser — no server, no uploads. Built on
@@ -179,7 +205,7 @@
 </section>
 
 <footer class="wrap foot">
-  <p>PixelQR - an interactive for a portfolio near you. <span class="dim">Scan the avatar. Find the person.</span></p>
+  <p>PixelQR - an interactive for a profile picture near you. <span class="dim">Scan the avatar. Find what they specifically wanted you to.</span></p>
 </footer>
 
 <script>

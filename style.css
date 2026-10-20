@@ -110,6 +110,8 @@ html, body {
 }
 
 .legend { color: var(--dim); font-size: 12.5px; margin: 14px 0 0; }
+.legend.dim { margin-top: 8px; opacity: 0.8; font-style: italic; }
+.hidden { display: none !important; }
 
 /* ---------- preview panel ---------- */
 .badge {
