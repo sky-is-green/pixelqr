@@ -1632,6 +1632,54 @@
     return out;
   }
 
+  /**
+   * The smallest version that can carry this url at level H — and, if asked,
+   * that has room to draw in. The version list uses it to grey out the
+   * versions that could never work for this link, so nobody picks one and
+   * gets a "code length overflow" instead of a code.
+   */
+  function minVersion(url, opts) {
+    opts = opts || {};
+    var bytes = utf8Len(url);
+    for (var v = MIN_VERSION; v <= MAX_VERSION; v++) {
+      var plan = codePlan(v);
+      var totalData = 0;
+      for (var r = 0; r < plan.rsBlocks.length; r++) totalData += plan.rsBlocks[r].dataCount;
+      var countBits = v <= 9 ? 8 : 16;
+      var bits = 4 + countBits + bytes * 8;
+      if (bits + 4 <= totalData * 8) bits += 4;
+      if (Math.ceil(bits / 8) > totalData) continue; // the link does not fit
+      var shape = opts.pipeline === 'custom'
+        ? customShape(url, v)
+        : canvasShape(url, v, { surface: opts.surface });
+      if (shape.R <= 0 || shape.cells < 20) continue; // no room to draw
+      return v;
+    }
+    return MAX_VERSION;
+  }
+
+  /**
+   * The custom pipeline's free surface: a circle in the middle of the disc,
+   * sized by the same budget rules as the standard one (codewords overall, and
+   * no single RS block over its share), and never reaching the finder
+   * patterns.
+   */
+  function customShape(url, version) {
+    var lay = customLayout(version);
+    var plan = codePlan(version);
+    var tSum = 0;
+    for (var b = 0; b < plan.tPerBlock.length; b++) tSum += plan.tPerBlock[b];
+    var budgetCw = tSum * 0.85;
+    // the drawing may not reach the finder patterns
+    var cap = Math.max(2, lay.dFind - 5);
+    // the same budget rules as the standard pipeline: codewords overall,
+    // and no single RS block over its share
+    var base = null;
+    try { base = buildCustom(url, version, 0, null, lay); } catch (e) { base = null; }
+    var R = surfaceRadiusForBudget(base, 'circle', budgetCw, 0.95, cap, lay.G);
+    return surfaceAt('circle', R, lay.G, { func: lay.func, layout: lay });
+  }
+
   // -------------------------- the custom pipeline -----------------------------
   // A second backend, and our own: instead of the standard square QR, a
   // circle-native one. The module grid is a DISC, not a square, so the code
@@ -1884,21 +1932,11 @@
     },
     fit: function (url, version, art, opts) {
       var lay = customLayout(version);
-      var plan = codePlan(version);
-      var tSum = 0;
-      for (var b = 0; b < plan.tPerBlock.length; b++) tSum += plan.tPerBlock[b];
-      var budgetCw = tSum * 0.85;
-      // the drawing may not reach the finder patterns
-      var cap = Math.max(2, lay.dFind - 5);
-      // the same budget rules as the standard pipeline: codewords overall,
-      // and no single RS block over its share
-      var base = null;
-      try { base = buildCustom(url, version, 0, null, lay); } catch (e) { base = null; }
-      var R = surfaceRadiusForBudget(base, 'circle', budgetCw, 0.95, cap, lay.G);
+      var shape = customShape(url, version);
       var o = {};
       for (var k in opts) o[k] = opts[k];
-      o.surface = surfaceAt('circle', R, lay.G, { func: lay.func });
-      o.surfaceCap = cap;
+      o.surface = shape;
+      o.surfaceCap = Math.max(2, lay.dFind - 5);
       o.build = function (u, v, m, pads) { return buildCustom(u, v, m, pads, lay); };
       o.verify = this.verify;
       o.cacheKey = 'custom';
@@ -2105,6 +2143,8 @@
     roundLayout: roundLayout,
     roundAvatarBox: roundAvatarBox,
     customLayout: customLayout,
+    customShape: customShape,
+    minVersion: minVersion,
     buildCustom: buildCustom,
     decodeCustom: decodeCustom,
     discCells: discCells,

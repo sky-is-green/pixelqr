@@ -30,43 +30,60 @@
     </div>
 
     <div class="tools">
-      <div class="group" role="group" aria-label="Pipeline">
+      <div class="group" role="group" aria-label="Mode">
         <span class="group-label">Mode</span>
-        <button class="chip active" data-pipeline="standard" title="An ordinary QR code — any phone camera reads it">standard</button>
-        <button class="chip" data-pipeline="custom" title="Our own circular layout — fills a round avatar edge to edge">custom</button>
+        <div class="chips">
+          <button class="chip active" data-pipeline="standard" title="An ordinary QR code — any phone camera reads it">standard</button>
+          <button class="chip" data-pipeline="custom" title="Our own circular layout — fills a round avatar edge to edge">custom</button>
+        </div>
       </div>
       <div class="group" role="group" aria-label="Surface" id="surface-group">
         <span class="group-label">Surface</span>
-        <button class="chip active" data-surface="squircle" title="A rounded square in the middle">square</button>
-        <button class="chip" data-surface="circle" title="A circle — the round profile picture">circle</button>
-        <button class="chip" data-surface="cross" title="A cross reaching to the code's edges">cross</button>
+        <div class="chips">
+          <button class="chip active" data-surface="squircle" title="A rounded square in the middle">square</button>
+          <button class="chip" data-surface="circle" title="A circle — the round profile picture">circle</button>
+          <button class="chip" data-surface="cross" title="A cross reaching to the code's edges (needs a big version)">cross</button>
+        </div>
       </div>
       <div class="group" role="group" aria-label="Brush">
         <span class="group-label">Brush</span>
-        <button class="chip brush active" data-brush="1" title="Paint ink">●&nbsp;ink</button>
-        <button class="chip brush" data-brush="0" title="Erase back to light">○&nbsp;erase</button>
+        <div class="chips">
+          <button class="chip brush active" data-brush="1" title="Paint ink">●&nbsp;ink</button>
+          <button class="chip brush" data-brush="0" title="Erase back to light">○&nbsp;erase</button>
+        </div>
       </div>
       <div class="group" role="group" aria-label="Style">
         <span class="group-label">Style</span>
-        <button class="chip" data-style="square" title="Crisp square modules (classic)">▪&nbsp;square</button>
-        <button class="chip active" data-style="dots" title="Dots + ringed finders — calmest look, decode-verified">●&nbsp;dots</button>
-        <button class="chip" data-style="squircle" title="Soft-square superellipse tiles">squircle</button>
-        <button class="chip" data-style="hexagon" title="Honeycomb hexagon tiles + hexagon eyes">hexagon</button>
-        <button class="chip" data-style="leaf" title="Interlocking petal tiles + leaf-shaped eyes">leaf</button>
-        <button class="chip" data-style="diamond" title="Diagonal diamond lattice">◆&nbsp;diamond</button>
+        <div class="chips">
+          <button class="chip" data-style="square" title="Crisp square modules (classic)">▪&nbsp;square</button>
+          <button class="chip active" data-style="dots" title="Dots + ringed finders — calmest look, decode-verified">●&nbsp;dots</button>
+          <button class="chip" data-style="squircle" title="Soft-square superellipse tiles">squircle</button>
+          <button class="chip" data-style="hexagon" title="Honeycomb hexagon tiles + hexagon eyes">hexagon</button>
+          <button class="chip" data-style="leaf" title="Interlocking petal tiles + leaf-shaped eyes">leaf</button>
+          <button class="chip" data-style="diamond" title="Diagonal diamond lattice">◆&nbsp;diamond</button>
+        </div>
       </div>
-      <div class="group">
+      <div class="group" role="group" aria-label="Presets">
         <span class="group-label">Presets</span>
-        <button class="chip" data-preset="CAT">cat</button>
-        <button class="chip" data-preset="SMILEY">smiley</button>
-        <button class="chip" data-preset="HEART">heart</button>
+        <div class="chips">
+          <button class="chip" data-preset="CAT">cat</button>
+          <button class="chip" data-preset="SMILEY">smiley</button>
+          <button class="chip" data-preset="HEART">heart</button>
+        </div>
       </div>
-      <div class="group">
+      <div class="group" role="group" aria-label="Image">
         <span class="group-label">Image</span>
-        <button class="chip" id="upload">upload&nbsp;image</button>
-        <button class="chip" id="clear">clear</button>
-        <button class="chip" id="undo">undo</button>
+        <div class="chips">
+          <button class="chip" id="upload" title="Downsample an image into the free surface">upload&nbsp;image</button>
+        </div>
         <input type="file" id="file" accept="image/*" hidden>
+      </div>
+      <div class="group" role="group" aria-label="Canvas">
+        <span class="group-label">Canvas</span>
+        <div class="chips">
+          <button class="chip" id="clear" title="Erase every drawing — the surface goes back to blank">clear</button>
+          <button class="chip" id="undo" title="Ctrl/Cmd+Z — step back through edits">undo</button>
+        </div>
       </div>
     </div>
 

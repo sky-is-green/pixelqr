@@ -48,7 +48,14 @@ node test/pipeline.js
   algebra to pin more surface cells exactly, for free. No scan margin spent.
 - **Versions 2–13** (25–69 modules). Every version buys a bigger error budget,
   and a bigger budget buys a bigger free surface: ~17×17 cells at v4, ~23×23
-  at v6, ~35×35 at v10 for a 22-character link.
+  at v6, ~35×35 at v10 for a 22-character link. A version that could never
+  hold the link (or would leave no room to draw) is greyed out in the list.
+- **The alignment patterns are the code's, not yours.** From v7 on, a QR code
+  carries 5×5 alignment patterns, and one of them sits exactly in the middle —
+  in the middle of the drawing area. Its position is fixed by the spec and the
+  decoder needs it to find the code's own geometry (blanking it stops the
+  read), so it stays blank. The custom backend has no alignment patterns at
+  all, so nothing interrupts the drawing there.
 - **Styles** — `square`, `dots` (tangent circles), `squircle` (soft-square
   superellipse), `hexagon` (honeycomb tiles + hexagon eyes), `leaf`
   (interlocking petals + leaf-shaped eyes) and `diamond` (diagonal lattice).
@@ -164,14 +171,15 @@ and changes one thing: **the layout**.
 | Control | What it does |
 |---|---|
 | Mode: standard / custom | The ordinary QR, or our own circular layout |
-| Surface: square / circle / cross | The shape of the free area |
+| Surface: square / circle / cross | The shape of the free area (the cross is thin — it needs a big version) |
 | Brush: ink / erase | Paint a module dark, or back to light (right-click erases too) |
 | Style: square / dots / squircle / hexagon / leaf / diamond | How the final code is rendered — every style is decode-verified as rendered (crisp, blurred, downscaled) |
-| Undo | Ctrl/Cmd+Z or the button — steps back through edits |
 | Presets: cat / smiley / heart | Load a module-resolution template |
 | Upload image | Downsample any image to the grid (dark/light threshold) |
+| Clear | Wipe every drawing — the surface goes back to blank (undo brings it back) |
+| Undo | Ctrl/Cmd+Z or the button — steps back through edits |
 | Link to → | The URL the QR encodes |
-| Version | v2–v13 = 25–69 modules; each shows the surface it would give this link (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
+| Version | v2–v13 = 25–69 modules; each shows the surface it would give this link, and the ones that cannot hold the link are greyed out (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
 | Mask | auto / 0–7 / shuffle — auto runs the pattern-fit search (may add a `#x` anchor fragment to the link); a fixed mask keeps your exact link |
 | PNG / SVG / Avatar 1024 / Avatar preview | Exports — the avatars are the round profile picture |
 
@@ -265,12 +273,17 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
 
 - Versions 2–13 are supported (the full alignment-pattern layout and the
   version-information blocks from v7 on).
-- The encoded URL must fit the chosen version at level H (the app shows a clean
-  error otherwise — raise the version).
+- The encoded URL must fit the chosen version at level H. The app greys out
+  the versions that cannot hold the link, and bumps the version if the link
+  outgrows the one you are on.
+- The alignment patterns are fixed by the spec and load-bearing for the
+  decoder: from v7 on, one sits in the middle of the drawing area and stays
+  blank. The custom backend has none.
 - The surface is sized by physics, not preference: a bigger surface needs a
   bigger error budget. For a 22-char link that means ~13×13 cells at v3,
   ~17×17 at v4, ~19×19 at v5, ~23×23 at v6, ~35×35 at v10. Shorter links grow
-  the surface (more free pad bits).
+  the surface (more free pad bits). A cross is thin, and needs a big version
+  before it has room to draw in.
 - The custom backend is **not a standard QR**. It is a QR-shaped code with our
   own layout: a phone camera will not read it. Use it when the shape matters
   more than the compatibility.

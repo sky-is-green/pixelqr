@@ -80,14 +80,19 @@ html, body {
 #preview { max-width: 100%; height: auto; image-rendering: pixelated; }
 
 /* ---------- tools ---------- */
-.tools { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
-.group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tools {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 20px;
+  align-items: start;
+}
+.group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .group-label {
-  width: 62px;
-  flex: none;
   color: var(--dim);
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  font-size: 11px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -220,7 +225,7 @@ html.crt .canvas-frame { margin-bottom: 10px; }
    cellFromEvent() is already scale-aware. */
 html.crt .canvas-frame canvas { max-width: 100%; height: auto; }
 html.crt .panel, html.crt .layout, html.crt .panel-head { min-width: 0; }
-html.crt .tools { margin-top: 10px; gap: 7px; }
+html.crt .tools { margin-top: 10px; gap: 9px 16px; }
 html.crt .settings { margin-top: 10px; }
 html.crt .panel { border-radius: 0; }
 html.crt .panel-head h2 { font-family: var(--label); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }

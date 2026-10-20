@@ -138,8 +138,29 @@ for (const v of [4, 6]) {
     Math.round(img.layout.side / 1024 * 100) + '% of the circle');
 }
 
-console.log('\n== the custom avatar fills the circle ==');
+console.log('\n== the versions that could work for a link ==');
 {
+  // a short link fits v2; a long one needs more, and the versions that
+  // cannot hold it (or have no room to draw) are greyed out in the app
+  const short = 'https://a.co';
+  const long = 'https://sky-is-green.github.io#';
+  check('a short link fits v2', P.minVersion(short) === 2, 'v' + P.minVersion(short));
+  check('a long link needs a bigger version', P.minVersion(long) >= 4, 'v' + P.minVersion(long));
+  for (const v of [2, 3, 4, 5, 6]) {
+    const url = long;
+    let fits = true;
+    try { P.buildBase(url, v, 0); } catch (e) { fits = false; }
+    const min = P.minVersion(url);
+    check('v' + v + (fits ? ' can hold the link' : ' cannot hold the link') + ' — and says so',
+      fits ? v >= min : v < min, 'min v' + min);
+  }
+  // the cross is thin: it needs a bigger version than the square does
+  const sq = P.minVersion(long, { surface: 'squircle' });
+  const cr = P.minVersion(long, { surface: 'cross' });
+  check('the cross needs a bigger version than the square', cr > sq, 'square v' + sq + ' · cross v' + cr);
+}
+
+console.log('\n== the custom avatar fills the circle ==');{
   const v = 6;
   const pipe = P.PIPELINES.custom;
   const lay = pipe.layout(URL, v);

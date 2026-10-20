@@ -30,6 +30,7 @@
     error: null
   };
   var labeledUrl = null; // which url the version labels reflect
+  var labelKey = null;   // url + pipeline + surface the labels reflect
 
   var undoStack = [];
 
@@ -108,17 +109,54 @@
     return { w: x1 - x0 + 1, h: y1 - y0 + 1 };
   }
 
-  /** Version labels show the surface each version would give for this link. */
+  /**
+   * Version labels: the grid each version would use, the surface it would
+   * give, and whether it could hold this link at all. A version that cannot
+   * (too short a link, or no room to draw) is greyed out rather than left to
+   * fail later.
+   */
   function updateVersionLabels() {
     var custom = state.pipeline === 'custom';
+    var min = P.minVersion(state.url, {
+      surface: custom ? 'circle' : state.surface,
+      pipeline: custom ? 'custom' : 'standard'
+    });
     Array.prototype.forEach.call($('#version').options, function (opt) {
       var v = parseInt(opt.value, 10);
-      var sh = P.canvasShape(state.url, v, { surface: state.surface });
       var grid = custom ? P.PIPELINES.custom.grid(state.url, v) : (v * 4 + 17);
-      // the estimate is deliberately conservative — the fit grows it
+      if (v < min) {
+        opt.disabled = true;
+        opt.textContent = 'v' + v + ' · too small for this link';
+        return;
+      }
+      opt.disabled = false;
+      var sh = P.canvasShape(state.url, v, { surface: custom ? 'circle' : state.surface });
       opt.textContent = 'v' + v + ' · ' + grid + '×' + grid +
         ' · free ~' + sh.width + '×' + sh.width;
     });
+    state.minVersion = min;
+  }
+
+  /**
+   * The note under the tools: what the current mode and version mean.
+   */
+  function updateHint() {
+    var hint = $('#pipeline-hint');
+    if (state.pipeline === 'custom') {
+      hint.textContent = P.PIPELINES.custom.hint +
+        ' No alignment patterns, no timing pattern — the whole disc is yours to draw in.';
+      return;
+    }
+    var bits = ['The ordinary QR code. Any phone camera reads it.'];
+    if (state.version >= 7) {
+      bits.push('From v7 on there are alignment patterns, and one sits in the middle of ' +
+        'the drawing area — the code needs it to find its own geometry, so it stays blank ' +
+        '(the custom mode has none).');
+    }
+    if (state.surface === 'cross') {
+      bits.push('A cross is thin: it needs a big version before there is room to draw.');
+    }
+    hint.textContent = bits.join(' ');
   }
 
   /**
@@ -314,9 +352,9 @@
       state.result = null;
       state.error = (typeof e === 'string') ? e : (e && e.message) || 'QR build failed';
     }
-    if (labeledUrl !== state.url || labeledUrl !== state.pipeline + state.surface) {
+    if (labelKey !== state.url + '|' + state.pipeline + '|' + state.surface) {
       updateVersionLabels();
-      labeledUrl = state.url + state.pipeline + state.surface;
+      labelKey = state.url + '|' + state.pipeline + '|' + state.surface;
     }
     drawEditor();
     drawPreview();
@@ -620,10 +658,27 @@
       state.url = this.value || 'https://USER.github.io';
       refresh();
     });
+    // When the link is committed, make sure the version can still hold it:
+    // a link that grew past the version's capacity is a dead error, so the
+    // version follows the link up to the smallest that fits.
+    $('#url').addEventListener('change', function () {
+      state.url = this.value || 'https://USER.github.io';
+      var min = P.minVersion(state.url, {
+        surface: state.pipeline === 'custom' ? 'circle' : state.surface,
+        pipeline: state.pipeline
+      });
+      if (state.version < min) {
+        state.version = min;
+        $('#version').value = String(min);
+        state.artRows = reframeRows(state.artRows, n());
+      }
+      refresh(true);
+    });
 
     $('#version').addEventListener('change', function () {
       state.version = parseInt(this.value, 10);
       state.artRows = reframeRows(state.artRows, n());
+      updateHint();
       refresh(true);
     });
 
@@ -664,11 +719,9 @@
         Array.prototype.forEach.call(document.querySelectorAll('[data-pipeline]'), function (b) {
           b.classList.toggle('active', b === btn);
         });
-        var custom = state.pipeline === 'custom';
-        $('#surface-group').classList.toggle('hidden', custom);
-        $('#pipeline-hint').textContent = custom
-          ? P.PIPELINES.custom.hint
-          : P.PIPELINES.standard.hint;
+        $('#surface-group').classList.toggle('hidden', state.pipeline === 'custom');
+        updateVersionLabels();
+        updateHint();
         state.artRows = reframeRows(state.artRows, n());
         refresh(true);
       });
@@ -681,6 +734,8 @@
         Array.prototype.forEach.call(document.querySelectorAll('[data-surface]'), function (b) {
           b.classList.toggle('active', b === btn);
         });
+        updateVersionLabels();
+        updateHint();
         refresh(true);
       });
     });
@@ -783,6 +838,7 @@
     wireEditor();
     wireControls();
     updateVersionLabels();
+    updateHint();
     refresh(true);
   }
 
