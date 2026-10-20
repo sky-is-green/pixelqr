@@ -1,9 +1,12 @@
+
 # PixelQR
 
 Paint pixel art. It becomes a **real, scannable QR code** — the art *is* the code.
 
+<img width="460" height="460" alt="1024_cut" src="https://github.com/user-attachments/assets/60c2c521-41e9-4ad8-be53-344b966201c4" />
+
 No server, no build step, no CDN: everything runs in the browser, works from
-`file://`, and can be embedded as a portfolio interactive (see below).
+`file://`, and can be embedded in your website (see below).
 
 ## Quick start
 
