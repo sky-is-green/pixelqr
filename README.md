@@ -170,9 +170,9 @@ and changes one thing: **the layout**.
 
 | Control | What it does |
 |---|---|
-| Mode: standard / custom | The ordinary QR, or our own circular layout |
-| Surface: square / circle / cross | The shape of the free area (the cross is thin — it needs a big version) |
+| Generation: standard / custom | The ordinary QR, or our own circular layout |
 | Brush: ink / erase | Paint a module dark, or back to light (right-click erases too) |
+| Surface: square / circle / cross | The shape of the free area (the cross is thin — it needs a big version) |
 | Style: square / dots / squircle / hexagon / leaf / diamond | How the final code is rendered — every style is decode-verified as rendered (crisp, blurred, downscaled) |
 | Presets: cat / smiley / heart | Load a module-resolution template |
 | Upload image | Downsample any image to the grid (dark/light threshold) |
@@ -182,6 +182,11 @@ and changes one thing: **the layout**.
 | Version | v2–v13 = 25–69 modules; each shows the surface it would give this link, and the ones that cannot hold the link are greyed out (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
 | Mask | auto / 0–7 / shuffle — auto runs the pattern-fit search (may add a `#x` anchor fragment to the link); a fixed mask keeps your exact link |
 | PNG / SVG / Avatar 1024 / Avatar preview | Exports — the avatars are the round profile picture |
+
+The editor draws the free surface's edge in blue, so what you can paint on is
+plain to see. From v7 on, the alignment pattern that sits in the middle of the
+drawing area gets the same blue outline — it is a hole in the surface, not
+something you can draw on.
 
 ## Embedding on a site (GitHub Pages)
 

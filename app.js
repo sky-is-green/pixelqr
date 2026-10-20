@@ -460,7 +460,7 @@
     // and the code ring)
     if (result && result.canvas) {
       var kind = result.canvas.kind, R = result.canvas.R;
-      ctx.strokeStyle = 'rgba(110, 231, 183, 0.6)';
+      ctx.strokeStyle = 'rgba(106, 166, 255, 0.9)';
       ctx.lineWidth = 3;
       ctx.beginPath();
       for (var yy = 0; yy < size; yy++) {
@@ -478,6 +478,17 @@
           if (xx === size - 1 || !P.surfaceHas(kind, R, xx + 1, yy, size)) {
             ctx.moveTo((xx + 1) * CELL - 1.5, yy * CELL); ctx.lineTo((xx + 1) * CELL - 1.5, (yy + 1) * CELL);
           }
+        }
+      }
+      // The alignment patterns are holes in that surface: from v7 on one sits
+      // exactly in the middle, and the code needs it, so it cannot be drawn
+      // on. Mark its edges the same way, so the drawing area reads true.
+      if (state.pipeline === 'standard') {
+        var pats = P.alignmentPatterns(state.version);
+        for (var pi = 0; pi < pats.length; pi++) {
+          var cx2 = pats[pi].x + 2, cy2 = pats[pi].y + 2;
+          if (!P.surfaceHas(kind, R, cx2, cy2, size)) continue;
+          ctx.rect(pats[pi].x * CELL + 1.5, pats[pi].y * CELL + 1.5, 5 * CELL - 3, 5 * CELL - 3);
         }
       }
       ctx.stroke();

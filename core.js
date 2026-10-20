@@ -291,6 +291,28 @@
     };
   }
 
+  /**
+   * The alignment patterns of a version: the top-left corners of their 5×5
+   * blocks, minus the three that would sit inside a finder pattern. From v7
+   * on there is one exactly in the middle of the code — in the middle of the
+   * drawing area — and the code needs it, so it cannot be painted on.
+   */
+  function alignmentPatterns(version) {
+    var n = version * 4 + 17;
+    var pos = ALIGN_POS[version] || [];
+    var out = [];
+    for (var a = 0; a < pos.length; a++) {
+      for (var b = 0; b < pos.length; b++) {
+        var row = pos[a], col = pos[b];
+        if (row <= 7 && col <= 7) continue;              // top-left finder
+        if (row <= 7 && col >= n - 8) continue;          // top-right finder
+        if (row >= n - 8 && col <= 7) continue;          // bottom-left finder
+        out.push({ x: col - 2, y: row - 2 });
+      }
+    }
+    return out;
+  }
+
   // --------------------------- payload freedom ---------------------------------
   // Pad codewords after the terminator are never read by decoders (ISO 18004:
   // "pad codewords shall have no significance"). They are free bits: the map
@@ -2101,6 +2123,7 @@
     REMAINDER_BITS: REMAINDER_BITS,
     TEMPLATE_ROWS: TEMPLATE_ROWS,
     buildFunctionMask: buildFunctionMask,
+    alignmentPatterns: alignmentPatterns,
     maskAt: maskAt,
     placementOrder: placementOrder,
     codePlan: codePlan,

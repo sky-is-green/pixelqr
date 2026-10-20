@@ -33,11 +33,18 @@
     </div>
 
     <div class="tools">
-      <div class="group" role="group" aria-label="Mode">
-        <span class="group-label">Mode</span>
+      <div class="group" role="group" aria-label="Generation mode">
+        <span class="group-label">Generation</span>
         <div class="chips">
           <button class="chip active" data-pipeline="standard" title="An ordinary QR code — any phone camera reads it">standard</button>
           <button class="chip" data-pipeline="custom" title="Our own circular layout — fills a round avatar edge to edge">custom</button>
+        </div>
+      </div>
+      <div class="group" role="group" aria-label="Brush">
+        <span class="group-label">Brush</span>
+        <div class="chips">
+          <button class="chip brush active" data-brush="1" title="Paint ink">●&nbsp;ink</button>
+          <button class="chip brush" data-brush="0" title="Erase back to light">○&nbsp;erase</button>
         </div>
       </div>
       <div class="group" role="group" aria-label="Surface" id="surface-group">
@@ -46,13 +53,6 @@
           <button class="chip active" data-surface="squircle" title="A rounded square in the middle">square</button>
           <button class="chip" data-surface="circle" title="A circle — the round profile picture">circle</button>
           <button class="chip" data-surface="cross" title="A cross reaching to the code's edges (needs a big version)">cross</button>
-        </div>
-      </div>
-      <div class="group" role="group" aria-label="Brush">
-        <span class="group-label">Brush</span>
-        <div class="chips">
-          <button class="chip brush active" data-brush="1" title="Paint ink">●&nbsp;ink</button>
-          <button class="chip brush" data-brush="0" title="Erase back to light">○&nbsp;erase</button>
         </div>
       </div>
       <div class="group" role="group" aria-label="Style">
