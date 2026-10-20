@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PixelQR — pixel art as a scannable QR code</title>
+<title>PixelQR: pixel art as a scannable QR code</title>
 <!-- The app's own files carry a version: they change together, and a browser
      that cached the old core.js with the new app.js would break. Bump ?v= when
      the app changes. -->
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -15,7 +15,7 @@
   <div class="wrap">
     <h1><a class="home" href="https://github.com/sky-is-green/pixelqr" target="_blank" rel="noopener"
            title="PixelQR on GitHub">Pixel<span>QR</span></a></h1>
-    <p class="tagline">Paint pixel art. It becomes a real, scannable QR code — the art <em>is</em> the code.</p>
+    <p class="tagline">Paint pixel art. It becomes a real, scannable QR code: the art <em>is</em> the code.</p>
   </div>
 </header>
 
@@ -28,9 +28,9 @@
       <div class="head-tools">
         <span class="hint">drag to paint · right-click = erase · ctrl+z = undo</span>
         <div class="zoom" role="group" aria-label="Zoom">
-          <button class="chip zoom-btn" id="zoom-out" title="Zoom out — smaller cells">−</button>
+          <button class="chip zoom-btn" id="zoom-out" title="Zoom out: smaller cells">−</button>
           <span class="zoom-level" id="zoom-level">1×</span>
-          <button class="chip zoom-btn" id="zoom-in" title="Zoom in — finer detail">+</button>
+          <button class="chip zoom-btn" id="zoom-in" title="Zoom in: finer detail">+</button>
         </div>
       </div>
     </div>
@@ -43,8 +43,8 @@
       <div class="group" role="group" aria-label="Generation mode">
         <span class="group-label">Generation</span>
         <div class="chips">
-          <button class="chip active" data-pipeline="standard" title="An ordinary QR code — any phone camera reads it">standard</button>
-          <button class="chip" data-pipeline="custom" title="My own circular layout — fills a round avatar edge to edge">custom</button>
+          <button class="chip active" data-pipeline="standard" title="An ordinary QR code: any phone camera reads it">standard</button>
+          <button class="chip" data-pipeline="custom" title="My own circular layout: fills a round avatar edge to edge">custom</button>
         </div>
       </div>
       <div class="group" role="group" aria-label="Brush">
@@ -58,7 +58,7 @@
         <span class="group-label">Surface</span>
         <div class="chips">
           <button class="chip active" data-surface="squircle" title="A rounded square in the middle">square</button>
-          <button class="chip" data-surface="circle" title="A circle — the round profile picture">circle</button>
+          <button class="chip" data-surface="circle" title="A circle: the round profile picture">circle</button>
           <button class="chip" data-surface="cross" title="A cross reaching to the code's edges (needs a big version)">cross</button>
         </div>
       </div>
@@ -66,7 +66,7 @@
         <span class="group-label">Style</span>
         <div class="chips">
           <button class="chip" data-style="square" title="Crisp square modules (classic)">▪&nbsp;square</button>
-          <button class="chip active" data-style="dots" title="Dots + ringed finders — calmest look, decode-verified">●&nbsp;dots</button>
+          <button class="chip active" data-style="dots" title="Dots + ringed finders: calmest look, decode-verified">●&nbsp;dots</button>
           <button class="chip" data-style="squircle" title="Soft-square superellipse tiles">squircle</button>
           <button class="chip" data-style="hexagon" title="Honeycomb hexagon tiles + hexagon eyes">hexagon</button>
           <button class="chip" data-style="leaf" title="Interlocking petal tiles + leaf-shaped eyes">leaf</button>
@@ -91,17 +91,17 @@
       <div class="group" role="group" aria-label="Canvas">
         <span class="group-label">Canvas</span>
         <div class="chips">
-          <button class="chip" id="clear" title="Erase every drawing — the surface goes back to blank">clear</button>
-          <button class="chip" id="undo" title="Ctrl/Cmd+Z — step back through edits">undo</button>
+          <button class="chip" id="clear" title="Erase every drawing: the surface goes back to blank">clear</button>
+          <button class="chip" id="undo" title="Ctrl/Cmd+Z: step back through edits">undo</button>
         </div>
       </div>
     </div>
 
     <p class="legend">
-      The dashed outline is your <b>free surface</b> — everything inside is guaranteed clean:
+      The dashed outline is your <b>free surface</b>. Everything inside is guaranteed clean:
       no random code cells, what you paint is what scans. The faint-diagonal ring around it is
       the QR's own machine zone (plus the fixed finder/timing skeleton): the code's randomness lives
-      there, never inside your surface. Red dots mark ink that didn't fit — switch to a higher
+      there, never inside your surface. Red dots mark ink that didn't fit: switch to a higher
       version for a bigger surface, or erase it.
     </p>
     <p class="legend dim" id="pipeline-hint">The ordinary QR code. Any phone camera reads it.</p>
@@ -166,52 +166,52 @@
     <summary>How does this work?</summary>
     <div class="howto-body">
       <p>
-        A QR code at <b>error-correction level H</b> is built to survive up to ~30% damage — that
+        A QR code at <b>error-correction level H</b> is built to survive up to ~30% damage. That
         tolerance is a budget, and PixelQR spends it to make one region of the code <b>fully
         yours</b>: a free surface where every cell is pinned to your drawing (ink dark,
         background light). The code's own random cells are pushed outside it into the
-        ring — they're what keeps every link unique, and they never mix with your art. What you
+        ring. They're what keeps every link unique, and they never mix with your art. What you
         paint is what scans.
       </p>
       <ul>
-        <li><b>Free surface</b> (dashed outline) — the shape you choose, sized from the
+        <li><b>Free surface</b> (dashed outline): the shape you choose, sized from the
         available code budget, guaranteed to end up <b>100% free of random code cells</b>.
         A square, a circle or a cross; bigger versions buy a bigger surface (v3 ≈ 13×13 cells,
         v4 ≈ 17×17, v5 ≈ 19×19, v6 ≈ 23×23 for this link length; a shorter link buys more).
         If a pattern is stubborn, the surface steps one cell smaller until the guarantee
-        holds — it never shows noise.</li>
-        <li><b>The code ring</b> — everything outside the surface (faint diagonal) is the QR's
+        holds. It never shows noise.</li>
+        <li><b>The code ring</b>: everything outside the surface (faint diagonal) is the QR's
         machine zone: finder patterns, timing, and the random data cells carrying your link plus
         the digital signatures that make it decode. Its randomness is what makes the code unique.</li>
-        <li><b>Free payload bits</b> — the pad codewords after the payload terminator are never
+        <li><b>Free payload bits</b>: the pad codewords after the payload terminator are never
         read by decoders. The app solves them with linear algebra (same family of trick as
-        QArt/QArtText codes) to pin another batch of surface cells <i>exactly</i> — 16 free bits at
-        v3, 96 at v4, 176 at v5 — spending no scan margin at all.</li>
-        <li><b>Styled rendering</b> — dots or rounded tiles with rounded finders, the look
+        QArt/QArtText codes) to pin another batch of surface cells <i>exactly</i>: 16 free bits at
+        v3, 96 at v4, 176 at v5, spending no scan margin at all.</li>
+        <li><b>Styled rendering</b>: dots or rounded tiles with rounded finders, the look
         commercial design-QR generators use to calm the noise down. Every style is verified by
         decoding the styled render itself (crisp and blurred), so the pretty version is the
         scannable version.</li>
-        <li><b>Sacrificed codewords</b> — every 8 module bits form one codeword. Flipping the
+        <li><b>Sacrificed codewords</b>: every 8 module bits form one codeword. Flipping the
         codeword's bits costs the decoder only <i>one</i> error, so each sacrificed codeword pins
         a whole batch of surface cells.</li>
-        <li><b>Pattern-fit search</b> — the popup pattern is determined by the link and the mask.
+        <li><b>Pattern-fit search</b>: the popup pattern is determined by the link and the mask.
         The app quietly tries variant encodings and all 8 masks, then keeps the one whose free
         cells fit your drawing best (the tiny <code>#x</code> fragment it may add to your link
         only changes the anchor, not the page).</li>
-        <li><b>Live verification</b> — after every edit, the code is decoded in your browser with
+        <li><b>Live verification</b>: after every edit, the code is decoded in your browser with
         a real QR decoder (jsQR), both crisp and blurred/shrunk to simulate scanning at a
         distance. If it fails, the flip budget is auto-trimmed until it passes.</li>
-        <li><b>Red dots</b> in the canvas mark ink that didn't fit the budget — that's your cue
+        <li><b>Red dots</b> in the canvas mark ink that didn't fit the budget. That's your cue
         to switch to a higher version (bigger surface) or simplify that area.</li>
-        <li><b>Round profile pictures</b> — a profile picture is a circle, and a circle has no
+        <li><b>Round profile pictures</b>: a profile picture is a circle, and a circle has no
         corners, so the three finder patterns of a square QR sit exactly where a circular crop
         would eat them. In <b>standard</b> mode the QR is inscribed in the circle, so every eye
         stays inside it and any phone reads it. In <b>custom</b> mode the grid is a disc and the
-        eyes sit inside it, so the code fills the circle edge to edge — at the cost of no longer
+        eyes sit inside it, so the code fills the circle edge to edge, at the cost of no longer
         being a standard QR.</li>
       </ul>
       <p class="fine">
-        Everything runs in your browser — no server, no uploads. Built on
+        Everything runs in your browser: no server, no uploads. Built on
         qrcode-generator (MIT) and jsQR (Apache-2.0). Point your phone's camera at the preview to scan it.
       </p>
     </div>
@@ -231,9 +231,9 @@ try {
   if (embedded || asked === '1') document.documentElement.classList.add('crt');
 } catch (e) { document.documentElement.classList.add('crt'); }
 </script>
-<script src="lib/qrcode.js?v=4"></script>
-<script src="lib/jsQR.js?v=4"></script>
-<script src="core.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="lib/qrcode.js?v=5"></script>
+<script src="lib/jsQR.js?v=5"></script>
+<script src="core.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

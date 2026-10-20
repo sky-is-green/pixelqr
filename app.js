@@ -180,13 +180,13 @@
     var hint = $('#pipeline-hint');
     if (state.pipeline === 'custom') {
       hint.textContent = P.PIPELINES.custom.hint +
-        ' No alignment patterns, no timing pattern — the whole disc is yours to draw in.';
+        ' No alignment patterns, no timing pattern: the whole disc is yours to draw in.';
       return;
     }
     var bits = ['The ordinary QR code. Any phone camera reads it.'];
     if (state.version >= 7) {
       bits.push('From v7 on there are alignment patterns, and one sits in the middle of ' +
-        'the drawing area — the code needs it to find its own geometry, so it stays blank ' +
+        'the drawing area: the code needs it to find its own geometry, so it stays blank ' +
         '(the custom mode has none).');
     }
     if (state.surface === 'cross') {
@@ -626,10 +626,10 @@
       badge.classList.add('ok');
       badge.textContent = t.iterations > 1
         ? '✓ Decodes (auto-tuned)'
-        : (custom ? '✓ Decodes — clean' : '✓ Scannable — clean & at distance');
+        : (custom ? '✓ Decodes: clean' : '✓ Scannable: clean & at distance');
       var parts = [
         'surface ' + can.width + '×' + can.width +
-          (res.bg === 0 ? ' — zero random cells inside' : ' — ' + res.bg + ' stray cells left'),
+          (res.bg === 0 ? ' · zero random cells inside' : ' · ' + res.bg + ' stray cells left'),
         res.ink === 0 ? 'all ink realized' : res.ink + ' ink cells unrealized',
         t.cwUsed + '/' + t.cwBudget + ' codewords sacrificed'
       ];
@@ -638,13 +638,13 @@
         parts.push(state.result.pad.fixed + ' cells fixed by free payload bits');
       }
       parts.push(custom
-        ? 'decoded by the engine’s own Reed-Solomon decoder'
+        ? "decoded by the engine's own Reed-Solomon decoder"
         : 'decode-verified at 296px + 148px blurred, as rendered');
       detail.textContent = parts.join(' · ');
     } else {
       badge.classList.add('bad');
       badge.textContent = '✗ Not decodable with this art';
-      detail.textContent = 'Too many conflicting paints — erase some strokes or switch to a higher version (bigger surface).';
+      detail.textContent = 'Too many conflicting paints: erase some strokes or switch to a higher version (bigger surface).';
     }
     $('#stats').textContent = 'v' + base.version + ' · ' + n() + '×' + n() + ' modules · mask ' +
       state.result.mask + ' · ' + state.style + ' style · ' + can.kind + ' surface · ' +

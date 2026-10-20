@@ -755,7 +755,7 @@
     }
     if (opts.canvasR !== undefined) shape = surfaceAt(kind, opts.canvasR, shape.n, shape);
     if (shape.R <= 0 || shape.cells < 20) {
-      throw 'not enough room to draw at version ' + version + ' — try another surface or version';
+      throw 'not enough room to draw at version ' + version + ': try another surface or version';
     }
     var manual = typeof opts.mask === 'number';
     var last = null;
