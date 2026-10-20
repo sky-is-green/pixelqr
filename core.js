@@ -41,7 +41,9 @@
   // Versions the engine supports. v7+ brings the multi-alignment-pattern
   // layout and the 18-bit version-information blocks; from v7 the error
   // budget roughly doubles per step, so the writable surface grows a lot.
-  var MIN_VERSION = 2;
+  // v2 is out: at level H it carries so little that neither generation has
+  // room to draw in it.
+  var MIN_VERSION = 3;
   var MAX_VERSION = 13;
 
   // Alignment-pattern centre rows/cols per version (ISO/IEC 18004 table).
@@ -1938,7 +1940,7 @@
 
   registerPipeline('custom', {
     label: 'custom circle',
-    hint: 'Our own layout: a circular grid with the finder patterns inside it, ' +
+    hint: 'My own layout: a circular grid with the finder patterns inside it, ' +
           'so the code fills a round avatar edge to edge. Only a decoder that ' +
           'knows the layout reads it.',
     scannable: false,

@@ -28,7 +28,7 @@ node test/pipeline.js
 ## What it does
 
 - **Two backends.** *Standard* is an ordinary QR code — any phone camera reads
-  it. *Custom* is our own layout: a circular grid with the finder patterns
+  it. *Custom* is my own layout: a circular grid with the finder patterns
   inside it, so the code fills a round profile picture edge to edge. It reads
   with the engine's own decoder, not with a phone camera.
 - **Draw** on a module grid inside the **free surface** — a region (dashed
@@ -46,7 +46,7 @@ node test/pipeline.js
 - **Free payload bits** — on top of the flip budget, the pad codewords after
   the payload terminator (bits decoders never read) are *solved* with linear
   algebra to pin more surface cells exactly, for free. No scan margin spent.
-- **Versions 2–13** (25–69 modules). Every version buys a bigger error budget,
+- **Versions 3–13** (29–69 modules). Every version buys a bigger error budget,
   and a bigger budget buys a bigger free surface: ~17×17 cells at v4, ~23×23
   at v6, ~35×35 at v10 for a 22-character link. A version that could never
   hold the link (or would leave no room to draw) is greyed out in the list.
@@ -84,7 +84,7 @@ there are two answers, one per backend:
 - **Custom** — the grid is a disc and the eyes sit inside it, 120° apart, so
   the code fills the circle edge to edge. The payload, the Reed-Solomon coding,
   the interleaving and the mask are all the standard ones; only the *layout* is
-  ours, which means it is not a standard QR: only a decoder that knows the
+  mine, which means it is not a standard QR: only a decoder that knows the
   layout reads it.
 
 ## How it works
@@ -133,7 +133,7 @@ budget, and PixelQR spends it to carve out one region of the code that becomes
    to `padBits` target modules exactly — zero error budget spent, decoded
    payload byte-for-byte intact. This is the same family of trick as
    QArt/QArtText codes; the decoded link is unchanged.
-7. The 7 *remainder bits* (v2–13) carry no data — always free to paint.
+7. The 7 *remainder bits* (v3–13) carry no data — always free to paint.
 8. **Styled rendering** — dots or rounded tiles with rounded finder rings,
    with decode verification applied to the rendered style (crisp, blurred and
    downscaled). Tangent dots (diameter = 1 module) were chosen after probing
@@ -170,7 +170,7 @@ and changes one thing: **the layout**.
 
 | Control | What it does |
 |---|---|
-| Generation: standard / custom | The ordinary QR, or our own circular layout |
+| Generation: standard / custom | The ordinary QR, or my own circular layout |
 | Brush: ink / erase | Paint a module dark, or back to light (right-click erases too) |
 | Surface: square / circle / cross | The shape of the free area (the cross is thin — it needs a big version) |
 | Style: square / dots / squircle / hexagon / leaf / diamond | How the final code is rendered — every style is decode-verified as rendered (crisp, blurred, downscaled) |
@@ -179,7 +179,7 @@ and changes one thing: **the layout**.
 | Clear | Wipe every drawing — the surface goes back to blank (undo brings it back) |
 | Undo | Ctrl/Cmd+Z or the button — steps back through edits |
 | Link to → | The URL the QR encodes |
-| Version | v2–v13 = 25–69 modules; each shows the surface it would give this link, and the ones that cannot hold the link are greyed out (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
+| Version | v3–v13 = 29–69 modules; each shows the surface it would give this link, and the ones that cannot hold the link are greyed out (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
 | Mask | auto / 0–7 / shuffle — auto runs the pattern-fit search (may add a `#x` anchor fragment to the link); a fixed mask keeps your exact link |
 | PNG / SVG / Avatar 1024 / Avatar preview | Exports — the avatars are the round profile picture |
 
@@ -230,7 +230,7 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
 
 - **Structural roundtrip** — bits are extracted from the rendered QR (inverse
   placement walk + mask removal), de-interleaved and parsed back to the URL,
-  bit-exact for v2/v3/v4 × all 8 masks. This validates the walk, the mask
+  bit-exact for v3/v4 × all 8 masks. This validates the walk, the mask
   formulas, the function-mask geometry and the RS block mapping.
 - **Tolerance sweep** — flips vs strength, decoding at decreasing sizes with
   blur, for all templates and masks.
@@ -249,7 +249,7 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
 `test/canvas.js` additionally proves:
 
 - **Sizing** — canvas width per version for a given link (13/19/21/25 cells
-  at v2–v6 for a 22-char link).
+  at v3–v6 for a 22-char link).
 - **The zero-residual promise** — blank canvas and a cat at v3–v6: background
   stray cells = 0, unrealized ink = 0, decode verified.
 - **Reuse fast path** — a stroke re-fit keeps the encoding, keeps the canvas
@@ -260,14 +260,14 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
 
 - **Surfaces** — square, circle and cross all keep the promise (zero random
   cells inside, every stroke realized, the code still decodes).
-- **The version range** — v2 to v13 all build, fit and decode; bigger versions
+- **The version range** — v3 to v13 all build, fit and decode; bigger versions
   really do buy a bigger surface.
 - **The custom backend** — encodes and decodes, realizes the art, and leaves
   the corners free of finder patterns.
 - **The round avatar** — the standard QR, inscribed in the circle, still
   decodes after the circular crop.
 
-## Prior art (what commercial/OSS art-QR does, and what we took)
+## Prior art (what commercial/OSS art-QR does, and what I took)
 
 - **Halftone QR (Chu et al., SIGGRAPH Asia 2013)** — replaces each dark module
   with a 3×3 submodule tile and sacrifices a third of the error budget to
@@ -275,19 +275,19 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
   invasive and scan-marginal; **rejected**.
 - **QArt / QArtText (Russ Cox)** — solves *unused* payload bits (padding) over
   GF(2) so the picture is painted with zero errors, and brute-forces the mask
-  for the best fit. **Adopted** (our `padSolve` is the same idea; the mask +
+  for the best fit. **Adopted** (my `padSolve` is the same idea; the mask +
   fragment search was already in).
 - **qr-code-styling / QRCode Monkey / Unitag (commercial "design QR")** —
   module styling (dots / rounded / extra-rounded), styled finder eyes, and
-  `hideBackgroundDots`. **Adopted**: our style renderer redraws modules and
+  `hideBackgroundDots`. **Adopted**: my style renderer redraws modules and
   finder rings, and every style is decode-verified in-repo.
 - **Logo-in-the-middle (commercial)** — eats error budget with a big opaque
-  logo. We do the opposite: solve the middle *clean* for free, then paint it
+  logo. I do the opposite: solve the middle *clean* for free, then paint it
   with budget.
 
 ## Known limits
 
-- Versions 2–13 are supported (the full alignment-pattern layout and the
+- Versions 3–13 are supported (the full alignment-pattern layout and the
   version-information blocks from v7 on).
 - The encoded URL must fit the chosen version at level H. The app greys out
   the versions that cannot hold the link, and bumps the version if the link
@@ -300,7 +300,7 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
   ~17×17 at v4, ~19×19 at v5, ~23×23 at v6, ~35×35 at v10. Shorter links grow
   the surface (more free pad bits). A cross is thin, and needs a big version
   before it has room to draw in.
-- The custom backend is **not a standard QR**. It is a QR-shaped code with our
+- The custom backend is **not a standard QR**. It is a QR-shaped code with my
   own layout: a phone camera will not read it. Use it when the shape matters
   more than the compatibility.
 - Very small renders (≤40px) are intentionally unscannable — that's the

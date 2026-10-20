@@ -16,9 +16,9 @@ function readBits(bytes, pos, len) {
 }
 
 console.log('== structural roundtrip: extract bits from rendered QR, re-parse URL ==');
-const URL_BY_V = { 2: 'https://ab.xyz', 3: URL, 4: URL };
+const URL_BY_V = { 3: URL, 4: URL };
 let allOk = true;
-for (const v of [2, 3, 4]) {
+for (const v of [3, 4]) {
   const urlV = URL_BY_V[v];
   for (let m = 0; m < 8; m++) {
     const base = PixelQR.buildBase(urlV, v, m);

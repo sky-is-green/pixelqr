@@ -6,7 +6,7 @@
  *   standard — an ordinary QR code. Any phone camera reads it. The free
  *              surface (the area you may paint, kept free of random code
  *              cells) comes in three shapes and is sized by the error budget.
- *   custom   — our own layout: a circular grid with the finder patterns inside
+ *   custom   — my own layout: a circular grid with the finder patterns inside
  *              it, so the code fills a round avatar edge to edge. It decodes
  *              with the engine's own decoder, not with a phone camera.
  */
@@ -16,6 +16,14 @@
   var P = window.PixelQR;
   var CELL = 16;          // editor cell size (px)
   var PREVIEW_BOX = 12;   // preview module size (px)
+
+  // The versions on offer, per generation. The standard one keeps to the
+  // versions that have no alignment pattern in the drawing area (v3 to v6),
+  // plus v12 — the one that buys the biggest surface for a big drawing. The
+  // custom layout has no alignment patterns at all, so every version is fair
+  // game there.
+  var STANDARD_VERSIONS = [3, 4, 5, 6, 12];
+  var CUSTOM_VERSIONS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
   var state = {
     pipeline: 'standard',                    // standard | custom
@@ -39,7 +47,7 @@
   function $(sel) { return document.querySelector(sel); }
   function pipe() { return P.PIPELINES[state.pipeline] || P.PIPELINES.standard; }
 
-  /** The editor grid: a square for the standard pipeline, a disc's box for ours. */
+  /** The editor grid: a square for the standard pipeline, a disc's box for mine. */
   function n() {
     return pipe().grid(state.url, state.version);
   }
@@ -110,10 +118,33 @@
   }
 
   /**
+   * The version list for the current generation. A version that could never
+   * hold the link is greyed out rather than left to fail later.
+   */
+  function buildVersionList() {
+    var sel = $('#version');
+    var list = state.pipeline === 'custom' ? CUSTOM_VERSIONS : STANDARD_VERSIONS;
+    sel.innerHTML = '';
+    list.forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = String(v);
+      sel.appendChild(opt);
+    });
+    // keep the version if this generation still has it, else the nearest one
+    if (list.indexOf(state.version) < 0) {
+      var best = list[0], gap = 1e9;
+      list.forEach(function (v) {
+        var d = Math.abs(v - state.version);
+        if (d < gap) { gap = d; best = v; }
+      });
+      state.version = best;
+    }
+    sel.value = String(state.version);
+  }
+
+  /**
    * Version labels: the grid each version would use, the surface it would
-   * give, and whether it could hold this link at all. A version that cannot
-   * (too short a link, or no room to draw) is greyed out rather than left to
-   * fail later.
+   * give, and whether it could hold this link at all.
    */
   function updateVersionLabels() {
     var custom = state.pipeline === 'custom';
@@ -671,7 +702,8 @@
     });
     // When the link is committed, make sure the version can still hold it:
     // a link that grew past the version's capacity is a dead error, so the
-    // version follows the link up to the smallest that fits.
+    // version follows the link up to the smallest that fits — among the ones
+    // this generation offers.
     $('#url').addEventListener('change', function () {
       state.url = this.value || 'https://USER.github.io';
       var min = P.minVersion(state.url, {
@@ -679,8 +711,12 @@
         pipeline: state.pipeline
       });
       if (state.version < min) {
-        state.version = min;
-        $('#version').value = String(min);
+        var list = state.pipeline === 'custom' ? CUSTOM_VERSIONS : STANDARD_VERSIONS;
+        var pick = null;
+        list.forEach(function (v) { if (v >= min && (pick === null || v < pick)) pick = v; });
+        if (pick === null) pick = list[list.length - 1];
+        state.version = pick;
+        $('#version').value = String(pick);
         state.artRows = reframeRows(state.artRows, n());
       }
       refresh(true);
@@ -723,7 +759,7 @@
       });
     });
 
-    // The pipeline: standard QR, or our own circular layout.
+    // The generation: standard QR, or my own circular layout.
     Array.prototype.forEach.call(document.querySelectorAll('[data-pipeline]'), function (btn) {
       btn.addEventListener('click', function () {
         state.pipeline = btn.getAttribute('data-pipeline');
@@ -731,6 +767,7 @@
           b.classList.toggle('active', b === btn);
         });
         $('#surface-group').classList.toggle('hidden', state.pipeline === 'custom');
+        buildVersionList();
         updateVersionLabels();
         updateHint();
         state.artRows = reframeRows(state.artRows, n());
@@ -854,6 +891,7 @@
    * load rather than one that is still working.
    */
   function boot() {
+    buildVersionList();
     state.artRows = reframeRows(P.TEMPLATE_ROWS.CAT, n());
     wireEditor();
     wireControls();

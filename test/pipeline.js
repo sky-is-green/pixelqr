@@ -4,7 +4,7 @@
  *
  * What this proves:
  *   - the free surface comes in three shapes and always ends up free of
- *     random code cells, whatever the version (v2 to v13);
+ *     random code cells, whatever the version (v3 to v13);
  *   - the higher versions really do buy a bigger surface;
  *   - the custom pipeline round-trips: our own circular layout encodes, and
  *     the engine's own Reed-Solomon decoder reads it back, art and all;
@@ -59,10 +59,10 @@ for (const kind of P.SURFACE_KINDS) {
   console.log('  ' + kind + ': ' + line.join('  '));
 }
 
-console.log('\n== the version range: v2 to v13 all build, fit and decode ==');
-for (const v of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]) {
+console.log('\n== the version range: v3 to v13 all build, fit and decode ==');
+for (const v of [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]) {
   const n = v * 4 + 17;
-  // v2 and v3 hold a shorter link at level H
+  // v3 holds a shorter link at level H
   const url = v <= 3 ? 'https://a.co' : URL;
   let ok = true, info = '';
   try {
@@ -140,13 +140,13 @@ for (const v of [4, 6]) {
 
 console.log('\n== the versions that could work for a link ==');
 {
-  // a short link fits v2; a long one needs more, and the versions that
+  // a short link fits v3; a long one needs more, and the versions that
   // cannot hold it (or have no room to draw) are greyed out in the app
   const short = 'https://a.co';
   const long = 'https://sky-is-green.github.io#';
-  check('a short link fits v2', P.minVersion(short) === 2, 'v' + P.minVersion(short));
+  check('a short link fits v3', P.minVersion(short) === 3, 'v' + P.minVersion(short));
   check('a long link needs a bigger version', P.minVersion(long) >= 4, 'v' + P.minVersion(long));
-  for (const v of [2, 3, 4, 5, 6]) {
+  for (const v of [3, 4, 5, 6]) {
     const url = long;
     let fits = true;
     try { P.buildBase(url, v, 0); } catch (e) { fits = false; }

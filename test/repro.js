@@ -1,5 +1,5 @@
 /**
- * Visual check: art vs result with the v2 engine (full-canvas target + search).
+ * Visual check: art vs result with the v3 engine (full-canvas target + search).
  * Usage: node test/repro.js
  */
 'use strict';

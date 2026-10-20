@@ -47,7 +47,7 @@ function bbox(rows) {
 
 console.log('== canvas geometry per version (' + URL + ', ' + URL.length + ' chars) ==');
 const shapes = {};
-for (const v of [2, 3, 4, 5, 6]) {
+for (const v of [3, 4, 5, 6]) {
   const sh = P.canvasShape(URL, v);
   shapes[v] = sh;
   console.log('  v' + v + ' (' + (v * 4 + 17) + '×' + (v * 4 + 17) + '): canvas ' +
@@ -83,8 +83,8 @@ for (const v of [3, 4, 5, 6]) {
 for (const name of presetNames) {
   const bb = bbox(P.TEMPLATE_ROWS[name]);
   const need = Math.max(bb.w, bb.h) + 2;
-  let pick = 2;
-  for (let v = 2; v <= 6; v++) { if (shapes[v].width >= need) { pick = v; break; } }
+  let pick = 3;
+  for (let v = 3; v <= 6; v++) { if (shapes[v].width >= need) { pick = v; break; } }
   console.log('  preset auto-fit: ' + name + ' (' + bb.w + ' wide, need ' + need + ') → v' + pick);
   check(name + ' auto-fits at v' + pick, shapes[pick].width >= need);
 }
