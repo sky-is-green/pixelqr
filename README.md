@@ -75,6 +75,11 @@ node test/pipeline.js
   bigger for fine detail, redrawn at the new size rather than scaled, so it
   stays crisp, and the view keeps the same cell in the middle. Half is the
   overview: the whole grid at once.
+- **Read it back.** "Open code" reads a picture: a standard QR with jsQR, and one
+  of ours with the engine's own decoder. Ours is not a standard QR, so a phone
+  camera cannot read it — the app is the reader. The picture's shape gives the
+  grid, the eyes say when the fit is right, and the Reed-Solomon decoder sorts
+  out the rest.
 - **Undo** (Ctrl/Cmd+Z or the button) steps back through edits.
 - **Live verification**: after every edit the code is decoded in-browser with a
   real QR decoder (jsQR), both crisp and shrunk+blurred (simulating scanning at
@@ -177,6 +182,16 @@ and changes one thing: **the layout**.
   surface, every stroke realized, the payload intact) is checked with the
   engine's own decoder.
 
+**Reading one back** is the other half of the engine. A standard QR goes to
+jsQR. One of ours is read like this: the extent of the dark pixels gives the
+centre and the scale (roughly - the disc's edge is ragged, so this is a guess
+to within a module or so), the finder patterns say whether the fit is right,
+and the modules are sampled at the cell centres. The version is not written
+anywhere, so each is tried; neither is the mask, so all eight are. What is
+left wrong - a few modules at the rim - the Reed-Solomon decoder corrects,
+which is what it is for. A screenshot (flattened, with a margin) reads as
+well as the exported file.
+
 ## Controls
 
 | Control | What it does |
@@ -187,6 +202,7 @@ and changes one thing: **the layout**.
 | Style: square / dots / squircle / hexagon / leaf / diamond | How the final code is rendered: every style is decode-verified as rendered (crisp, blurred, downscaled) |
 | Presets: cat / smiley / heart | Load a module-resolution template |
 | Upload image | Downsample any image to the grid (dark/light threshold) |
+| Open code | Read a code from a file — a standard QR, or one of ours (the app is the reader for ours) |
 | Clear | Wipe every drawing: the surface goes back to blank (undo brings it back) |
 | Undo | Ctrl/Cmd+Z or the button: steps back through edits |
 | Zoom: − / 1× / + | ½× to 4× (also ctrl+wheel). Bigger cells for finer detail; ½× is the overview. The grid is redrawn at the new cell size, so it stays crisp, and the frame scrolls when it outgrows the panel: the same cell stays in the middle |

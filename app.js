@@ -893,8 +893,45 @@
       }
     });
 
-    $('#upload').addEventListener('click', function () { $('#file').click(); });
-    $('#file').addEventListener('change', function () {
+    /**
+     * Read a code from a file: a standard QR, or one of ours. Ours is not a
+     * standard QR, so a phone camera cannot read it — the app is the reader.
+     */
+    $('#open-code').addEventListener('click', function () { $('#code-file').click(); });
+    $('#code-file').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      this.value = '';
+      if (!file) return;
+      var note = $('#read-note');
+      var img = new Image();
+      img.onload = function () {
+        var size = Math.min(1024, Math.max(64, img.width));
+        var c = document.createElement('canvas');
+        c.width = c.height = size;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(img, 0, 0, size, size);
+        var data = ctx.getImageData(0, 0, size, size).data;
+        var read = P.readImage(data, size, size);
+        if (!read) {
+          note.textContent = 'Nothing readable in that file.';
+          return;
+        }
+        note.textContent = read.kind === 'custom'
+          ? 'Read a custom code (v' + read.version + '): ' + read.url
+          : 'Read a standard QR: ' + read.url;
+        state.url = read.url;
+        $('#url').value = read.url;
+        refresh(true);
+      };
+      img.onerror = function () {
+        note.textContent = 'That file could not be opened as an image.';
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    $('#upload').addEventListener('click', function () { $('#file').click(); });    $('#file').addEventListener('change', function () {
       var file = this.files && this.files[0];
       if (!file) return;
       var img = new Image();

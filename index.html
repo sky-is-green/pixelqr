@@ -8,7 +8,7 @@
 <!-- The app's own files carry a version: they change together, and a browser
      that cached the old core.js with the new app.js would break. Bump ?v= when
      the app changes. -->
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -89,6 +89,13 @@
         </div>
         <input type="file" id="file" accept="image/*" hidden>
       </div>
+      <div class="group" role="group" aria-label="Code">
+        <span class="group-label">Code</span>
+        <div class="chips">
+          <button class="chip" id="open-code" title="Read a code from a file — a standard QR, or one of ours">open&nbsp;code</button>
+        </div>
+        <input type="file" id="code-file" accept="image/*" hidden>
+      </div>
       <div class="group" role="group" aria-label="Canvas">
         <span class="group-label">Canvas</span>
         <div class="chips">
@@ -106,6 +113,7 @@
       version for a bigger surface, or erase it.
     </p>
     <p class="legend dim" id="pipeline-hint">The ordinary QR code. Any phone camera reads it.</p>
+    <p class="legend dim" id="read-note"></p>
   </section>
 
   <!-- ============ preview ============ -->
@@ -232,9 +240,9 @@ try {
   if (embedded || asked === '1') document.documentElement.classList.add('crt');
 } catch (e) { document.documentElement.classList.add('crt'); }
 </script>
-<script src="lib/qrcode.js?v=6"></script>
-<script src="lib/jsQR.js?v=6"></script>
-<script src="core.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="lib/qrcode.js?v=7"></script>
+<script src="lib/jsQR.js?v=7"></script>
+<script src="core.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

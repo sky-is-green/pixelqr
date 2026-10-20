@@ -1708,6 +1708,181 @@
     return surfaceAt('circle', R, lay.G, { func: lay.func, layout: lay });
   }
 
+  // ------------------------------ reading images -------------------------------
+  // The other half of the engine: a code goes into an image, and comes back
+  // out of one. A standard QR goes to jsQR. One of ours goes through the
+  // custom layout: the disc's cells are the ones nearest the centre, so the
+  // shape of the picture gives the grid.
+
+  /** The grid rectangle the disc's cells occupy. */
+  function discBounds(layout) {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (var i = 0; i < layout.disc.length; i++) {
+      var c = layout.disc[i];
+      if (c.x < x0) x0 = c.x;
+      if (c.x > x1) x1 = c.x;
+      if (c.y < y0) y0 = c.y;
+      if (c.y > y1) y1 = c.y;
+    }
+    return { x0: x0, y0: y0, x1: x1, y1: y1, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+
+  /**
+   * Where the code sits in the picture: the extent of the dark pixels. A
+   * screenshot has no transparency to lean on, and the disc's edge is ragged,
+   * so this is a guess to within about a module - which the Reed-Solomon
+   * decoder then sorts out.
+   */
+  function imageBox(data, width, height) {
+    var x0 = width, y0 = height, x1 = -1, y1 = -1;
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
+        var p = (y * width + x) * 4;
+        var lum = (data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000;
+        if (lum < 128) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < x0 || y1 < y0) return null;
+    return { x0: x0, y0: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+
+  /** Sample the grid of a custom layout out of a picture. */
+  function sampleDisc(lay, data, width, height, box, s, dx, dy) {
+    var G = lay.G;
+    var ox = box.x0 + box.w / 2 + dx - ((G - 1) / 2) * s;
+    var oy = box.y0 + box.h / 2 + dy - ((G - 1) / 2) * s;
+    var mods = new Uint8Array(G * G);
+    for (var y = 0; y < G; y++) {
+      for (var x = 0; x < G; x++) {
+        var px = Math.round(ox + x * s);
+        var py = Math.round(oy + y * s);
+        // the grid reaches past the picture at the corners; those cells are
+        // not part of the disc, so they are simply left light
+        if (px < 0 || py < 0 || px >= width || py >= height) continue;
+        var p = (py * width + px) * 4;
+        var lum = (data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000;
+        mods[y * G + x] = lum < 128 ? 1 : 0;
+      }
+    }
+    return mods;
+  }
+
+  /**
+   * How many of the finder pattern's cells a sample gets wrong. It is a
+   * measure, not a verdict: a styled render draws the eyes differently, and a
+   * half-module drift shifts the sample, so a few cells out is normal — the
+   * Reed-Solomon decoder sorts those out. A wrong version misses most of
+   * them, which is what tells the versions apart.
+   *
+   * Only the solid core of the eye is looked at: the centre and the four cells
+   * around it are dark in every style, whatever shape the eye itself takes.
+   */
+  function finderCells() {
+    var cells = [{ dx: 0, dy: 0, want: 1 }];
+    var ring = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (var g = 0; g < ring.length; g++) cells.push({ dx: ring[g][0], dy: ring[g][1], want: 1 });
+    return cells;
+  }
+  var FINDER_CELLS = finderCells();
+
+  function finderMismatch(lay, mods) {
+    var G = lay.G;
+    var bad = 0;
+    for (var f = 0; f < lay.finders.length; f++) {
+      var fx = lay.finders[f].x, fy = lay.finders[f].y;
+      for (var c = 0; c < FINDER_CELLS.length; c++) {
+        var cell = FINDER_CELLS[c];
+        if (mods[(fy + cell.dy) * G + (fx + cell.dx)] !== cell.want) bad++;
+      }
+    }
+    return bad;
+  }
+
+  /**
+   * The same measure, but sampling only the eyes — a few dozen pixels
+   * instead of the whole grid, so the search can be wide.
+   */
+  function finderMismatchAt(lay, data, width, height, box, s, dx, dy) {
+    var G = lay.G;
+    var ox = box.x0 + box.w / 2 + dx - ((G - 1) / 2) * s;
+    var oy = box.y0 + box.h / 2 + dy - ((G - 1) / 2) * s;
+    var bad = 0;
+    for (var f = 0; f < lay.finders.length; f++) {
+      var fx = lay.finders[f].x, fy = lay.finders[f].y;
+      for (var c = 0; c < FINDER_CELLS.length; c++) {
+        var cell = FINDER_CELLS[c];
+        var px = Math.round(ox + (fx + cell.dx) * s);
+        var py = Math.round(oy + (fy + cell.dy) * s);
+        if (px < 0 || py < 0 || px >= width || py >= height) { bad++; continue; }
+        var p = (py * width + px) * 4;
+        var lum = (data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000;
+        if ((lum < 128 ? 1 : 0) !== cell.want) bad++;
+      }
+    }
+    return bad;
+  }
+
+  /** The share of the eye cells a sample has to get right. */
+  var FINDER_TOLERANCE = 0.2;
+
+  /**
+   * Read one of our custom codes out of a picture. The version is not
+   * written anywhere, so each is tried: the layout fixes the grid, the
+   * picture's shape fixes the scale, and the modules are sampled at the
+   * cell centres.
+   */
+  function readCustom(data, width, height, opts) {
+    opts = opts || {};
+    var box = imageBox(data, width, height);
+    if (!box) return null;
+    for (var v = MIN_VERSION; v <= MAX_VERSION; v++) {
+      var lay = customLayout(v);
+      var s0 = (box.w / 2) / lay.rDisc;
+      if (s0 < 1) continue;
+      // the disc's edge is ragged, so the extent is a rough measure: the scale
+      // is searched around it, and the eyes say when it is right
+      for (var t = -15; t <= 15; t++) {
+        var s = s0 * (1 + t * 0.02);
+        for (var dy = -2; dy <= 2; dy++) {
+          for (var dx = -2; dx <= 2; dx++) {
+            // the offset is in modules, and a module is s pixels
+            var mx = dx * 0.5 * s, my = dy * 0.5 * s;
+            // the eyes first: a hundred and forty-odd pixels against the
+            // whole grid, and they say whether this version, scale and
+            // position are right
+            if (finderMismatchAt(lay, data, width, height, box, s, mx, my) > FINDER_CELLS.length * FINDER_TOLERANCE) continue;
+            var mods = sampleDisc(lay, data, width, height, box, s, mx, my);
+            if (!mods) continue;
+            // the mask is not written anywhere in our layout (a standard QR
+            // keeps it in the format information), so all eight are tried
+            for (var m = 0; m < 8; m++) {
+              var url = decodeCustom(mods, lay, m);
+              if (url) return { url: url, version: v, layout: lay, scale: s, mask: m };
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Read a code out of a picture: a standard one with jsQR, one of ours
+   * with the custom layout.
+   */
+  function readImage(data, width, height) {
+    var std = decodeRGBA({ data: data, width: width, height: height });
+    if (std) return { url: std, kind: 'standard' };
+    var ours = readCustom(data, width, height);
+    if (ours) return { url: ours.url, kind: 'custom', version: ours.version, layout: ours.layout };
+    return null;
+  }
+
   // -------------------------- the custom pipeline -----------------------------
   // A second backend, and our own: instead of the standard square QR, a
   // circle-native one. The module grid is a DISC, not a square, so the code
@@ -2173,6 +2348,13 @@
     roundAvatarBox: roundAvatarBox,
     customLayout: customLayout,
     customShape: customShape,
+    discBounds: discBounds,
+    imageBox: imageBox,
+    sampleDisc: sampleDisc,
+    finderMismatch: finderMismatch,
+    finderMismatchAt: finderMismatchAt,
+    readCustom: readCustom,
+    readImage: readImage,
     minVersion: minVersion,
     buildCustom: buildCustom,
     decodeCustom: decodeCustom,

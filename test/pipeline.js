@@ -164,6 +164,51 @@ console.log('\n== the versions that could work for a link ==');
   check('the cross needs a bigger version than the square', cr > sq, 'square v' + sq + ' · cross v' + cr);
 }
 
+console.log('\n== reading codes back out of pictures ==');
+{
+  const pipe = P.PIPELINES.custom;
+  // our own codes, every style, every version
+  let read = 0, total = 0;
+  for (const v of [4, 6, 8, 10]) {
+    const lay = pipe.layout(URL, v);
+    const art = P.artFromRows(reframe(P.TEMPLATE_ROWS.CAT, lay.G));
+    const w = pipe.fit(URL, v, art, { style: 'dots' });
+    for (const style of ['dots', 'square', 'hexagon']) {
+      const img = P.renderDiscRGBA(w.t.modules, lay.G, lay, 1024, style);
+      const got = P.readImage(img.data, img.width, img.height);
+      total++;
+      if (got && got.kind === 'custom' && got.url === URL) read++;
+      else console.log('  FAILED to read v' + v + ' ' + style);
+    }
+  }
+  check('every custom code reads back', read === total, read + ' of ' + total);
+
+  // a screenshot: flattened onto white, with a margin
+  const lay = pipe.layout(URL, 6);
+  const art = P.artFromRows(reframe(P.TEMPLATE_ROWS.CAT, lay.G));
+  const w = pipe.fit(URL, 6, art, { style: 'dots' });
+  const disc = P.renderDiscRGBA(w.t.modules, lay.G, lay, 1024, 'dots');
+  const M = 40, S = 1024 + M * 2;
+  const flat = new Uint8ClampedArray(S * S * 4).fill(255);
+  for (let y = 0; y < 1024; y++) {
+    for (let x = 0; x < 1024; x++) {
+      const p = ((y + M) * S + (x + M)) * 4, q = (y * 1024 + x) * 4;
+      flat[p] = disc.data[q]; flat[p + 1] = disc.data[q + 1]; flat[p + 2] = disc.data[q + 2];
+      flat[p + 3] = 255;
+    }
+  }
+  const shot = P.readImage(flat, S, S);
+  check('a screenshot of a custom code reads back', shot && shot.url === URL, String(shot && shot.url));
+
+  // and a standard QR, which jsQR reads
+  const n = 41;
+  const art2 = P.artFromRows(reframe(P.TEMPLATE_ROWS.CAT, n));
+  const w2 = P.fitWorkbench(URL, 6, art2, { style: 'dots' });
+  const std = P.renderRGBA(w2.t.modules, n, 16, 4, 'dots');
+  const got = P.readImage(std.data, std.width, std.height);
+  check('a standard QR reads back', got && got.kind === 'standard' && got.url === URL, String(got && got.url));
+}
+
 console.log('\n== the custom avatar fills the circle ==');{
   const v = 6;
   const pipe = P.PIPELINES.custom;
