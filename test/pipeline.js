@@ -132,8 +132,12 @@ for (const v of [4, 6]) {
   const img = P.renderRoundRGBA(w.t.modules, n, 1024, 'dots', { box: box });
   const dec = P.decodeRGBA(img);
   check('v' + v + ' the round avatar decodes after the crop', dec === w.fit.base.url, String(dec));
-  const small = P.renderRoundRGBA(w.t.modules, n, 260, 'dots');
-  check('v' + v + ' the round avatar decodes at 260px', P.decodeRGBA(small) === w.fit.base.url);
+  // a scanner wants a four-module quiet zone; the circle only has its
+  // diagonal to give at the corners
+  const quiet = (1024 / 2 - (box * n) / Math.SQRT2) / box;
+  check('v' + v + ' the round avatar keeps a quiet zone', quiet >= 4, quiet.toFixed(1) + ' modules');
+  const half = P.renderRoundRGBA(w.t.modules, n, 512, 'dots');
+  check('v' + v + ' the round avatar decodes at 512px', P.decodeRGBA(half) === w.fit.base.url);
   console.log('  v' + v + ': ' + box + 'px per module, the code is ' +
     Math.round(img.layout.side / 1024 * 100) + '% of the circle');
 }

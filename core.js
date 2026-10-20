@@ -1336,13 +1336,17 @@
 
   /**
    * The round avatar geometry for a standard QR: the square is inscribed in
-   * the circle, so its corners (the eyes) touch the rim. `shrink` pulls it
-   * in a touch, so the eyes sit clear of the edge.
+   * the circle, so its corners (the eyes) touch the rim. A scanner wants a
+   * four-module quiet zone around the code — that is what stops it reading
+   * the wrong thing — and at the corners the circle only has the diagonal to
+   * give, so the module size is set by the quiet zone rather than by the
+   * circle. `shrink` trims it further.
    */
   function roundLayout(n, D, shrink) {
-    shrink = shrink || 0.94;
+    shrink = shrink || 1;
     var r = (D / 2) * shrink;
-    var box = Math.max(1, Math.floor((r * Math.SQRT2) / n));
+    // the code's half-diagonal plus the quiet zone has to fit the radius
+    var box = Math.max(1, Math.floor(r / (n / Math.SQRT2 + 4)));
     var side = box * n;
     return { box: box, side: side, off: Math.round((D - side) / 2), size: D, shrink: shrink };
   }
