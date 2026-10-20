@@ -1858,11 +1858,17 @@
             if (finderMismatchAt(lay, data, width, height, box, s, mx, my) > FINDER_CELLS.length * FINDER_TOLERANCE) continue;
             var mods = sampleDisc(lay, data, width, height, box, s, mx, my);
             if (!mods) continue;
-            // the mask is not written anywhere in our layout (a standard QR
-            // keeps it in the format information), so all eight are tried
-            for (var m = 0; m < 8; m++) {
-              var url = decodeCustom(mods, lay, m);
-              if (url) return { url: url, version: v, layout: lay, scale: s, mask: m };
+            // the format block says which mask this is, so the read is one try
+            // instead of eight. Its own fit is near the eye, so it is used for
+            // the mask alone: the data is sampled where the search found it,
+            // and Reed-Solomon sorts out the drift.
+            var fine = readFormatNear(lay, data, width, height, box, s, mx, my);
+            var masks = fine ? [fine.mask] : [0, 1, 2, 3, 4, 5, 6, 7];
+            for (var mi = 0; mi < masks.length; mi++) {
+              var url = decodeCustom(mods, lay, masks[mi]);
+              if (url) {
+                return { url: url, version: v, layout: lay, scale: s, mask: masks[mi], format: !!fine };
+              }
             }
           }
         }
@@ -1879,7 +1885,115 @@
     var std = decodeRGBA({ data: data, width: width, height: height });
     if (std) return { url: std, kind: 'standard' };
     var ours = readCustom(data, width, height);
-    if (ours) return { url: ours.url, kind: 'custom', version: ours.version, layout: ours.layout };
+    if (ours) {
+      return {
+        url: ours.url, kind: 'custom', version: ours.version, layout: ours.layout,
+        scale: ours.scale, mask: ours.mask, format: ours.format
+      };
+    }
+    return null;
+  }
+
+  // ------------------------------ the format block -----------------------------
+  // A standard QR keeps the mask and the version in metadata beside the first
+  // finder pattern. Ours has none, so the reader has to search for both. The
+  // eyes' separator rings can carry the same thing: that ring is structure, so
+  // nothing can paint over it, and it sits out in the rim where the drawing
+  // never reaches.
+  //
+  // Fifteen cells per eye: the version (4 bits), the mask (3 bits) and a
+  // checksum (8 bits), so a misread eye is caught rather than believed.
+
+  var FORMAT_BITS = 15;
+
+  /** The ring cells that carry the format, in bit order, round one eye. */
+  function formatCells(fx, fy) {
+    var cells = [];
+    for (var i = 0; i < 9; i++) cells.push({ x: fx - 4 + i, y: fy + 4 });
+    for (var j = 0; j < 6; j++) cells.push({ x: fx + 4, y: fy + 3 - j });
+    return cells;
+  }
+
+  /** CRC-8 (0x07) over the version and the mask. */
+  function formatCrc(byte) {
+    var crc = 0;
+    for (var i = 0; i < 8; i++) {
+      var bit = (byte >> (7 - i)) & 1;
+      var top = (crc >> 7) & 1;
+      crc = ((crc << 1) | bit) & 0xff;
+      if (top) crc ^= 0x07;
+    }
+    return crc;
+  }
+
+  /** The format bits: version, mask, checksum. */
+  function formatBits(version, mask) {
+    var data = ((version & 0xf) << 3) | (mask & 7);
+    var crc = formatCrc(data);
+    var bits = [];
+    for (var v = 6; v >= 3; v--) bits.push((data >> v) & 1);   // the version
+    for (var m = 2; m >= 0; m--) bits.push((data >> m) & 1);   // the mask
+    for (var c = 7; c >= 0; c--) bits.push((crc >> c) & 1);    // the checksum
+    return bits;
+  }
+
+  /** Read the format back out of a sampled module matrix. */
+  function readFormat(lay, mods) {
+    var cells = formatCells(lay.finders[0].x, lay.finders[0].y);
+    var bits = [];
+    for (var i = 0; i < cells.length && i < FORMAT_BITS; i++) {
+      bits.push(mods[cells[i].y * lay.G + cells[i].x] ? 1 : 0);
+    }
+    if (bits.length < FORMAT_BITS) return null;
+    var version = 0, mask = 0, crc = 0;
+    for (var b = 0; b < 4; b++) version = (version << 1) | bits[b];
+    for (var m = 0; m < 3; m++) mask = (mask << 1) | bits[4 + m];
+    for (var c = 0; c < 8; c++) crc = (crc << 1) | bits[7 + c];
+    var data = ((version & 0xf) << 3) | (mask & 7);
+    if (formatCrc(data) !== crc) return null;
+    if (version < MIN_VERSION || version > MAX_VERSION) return null;
+    return { version: version, mask: mask };
+  }
+
+  /** Sample just the format cells of a layout out of a picture. */
+  function sampleFormat(lay, data, width, height, box, s, dx, dy) {
+    var G = lay.G;
+    var ox = box.x0 + box.w / 2 + dx - ((G - 1) / 2) * s;
+    var oy = box.y0 + box.h / 2 + dy - ((G - 1) / 2) * s;
+    var cells = formatCells(lay.finders[0].x, lay.finders[0].y);
+    var mods = new Uint8Array(G * G);
+    for (var i = 0; i < cells.length; i++) {
+      var px = Math.round(ox + cells[i].x * s);
+      var py = Math.round(oy + cells[i].y * s);
+      if (px < 0 || py < 0 || px >= width || py >= height) return null;
+      var p = (py * width + px) * 4;
+      var lum = (data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000;
+      mods[cells[i].y * G + cells[i].x] = lum < 128 ? 1 : 0;
+    }
+    return mods;
+  }
+
+  /**
+   * The format block is the arbiter: the search finds roughly where the code
+   * is, and this fine search around that fit finds the exact scale and
+   * position — the ones the checksum agrees with. With them the mask is known
+   * too, so the code is read in one go instead of eight.
+   */
+  function readFormatNear(lay, data, width, height, box, s, mx, my) {
+    for (var t = -8; t <= 8; t++) {
+      var s2 = s * (1 + t * 0.005);
+      for (var dy = -10; dy <= 10; dy++) {
+        for (var dx = -10; dx <= 10; dx++) {
+          var ox = mx + dx * 0.1 * s2, oy = my + dy * 0.1 * s2;
+          var mods = sampleFormat(lay, data, width, height, box, s2, ox, oy);
+          if (!mods) continue;
+          var fmt = readFormat(lay, mods);
+          if (fmt && fmt.version === lay.version) {
+            return { s: s2, mx: ox, my: oy, mask: fmt.mask };
+          }
+        }
+      }
+    }
     return null;
   }
 
@@ -2020,6 +2134,15 @@
     var G = layout.G;
     var modules = new Uint8Array(G * G);
     drawCustomFinders(modules, layout);
+    // the format block, in every eye's ring: the version, the mask and a
+    // checksum, so a reader knows where it is and what it is looking at
+    var fbits = formatBits(version, mask);
+    for (var f = 0; f < layout.finders.length; f++) {
+      var fcells = formatCells(layout.finders[f].x, layout.finders[f].y);
+      for (var fb = 0; fb < fbits.length; fb++) {
+        modules[fcells[fb].y * G + fcells[fb].x] = fbits[fb];
+      }
+    }
     for (var p = 0; p < layout.order.length && p < bits.length; p++) {
       var i = layout.order[p];
       var y = (i / G) | 0, x = i % G;
@@ -2354,6 +2477,11 @@
     finderMismatch: finderMismatch,
     finderMismatchAt: finderMismatchAt,
     readCustom: readCustom,
+    formatBits: formatBits,
+    readFormat: readFormat,
+    readFormatNear: readFormatNear,
+    sampleFormat: sampleFormat,
+    formatCells: formatCells,
     readImage: readImage,
     minVersion: minVersion,
     buildCustom: buildCustom,

@@ -186,11 +186,19 @@ and changes one thing: **the layout**.
 jsQR. One of ours is read like this: the extent of the dark pixels gives the
 centre and the scale (roughly - the disc's edge is ragged, so this is a guess
 to within a module or so), the finder patterns say whether the fit is right,
-and the modules are sampled at the cell centres. The version is not written
-anywhere, so each is tried; neither is the mask, so all eight are. What is
-left wrong - a few modules at the rim - the Reed-Solomon decoder corrects,
-which is what it is for. A screenshot (flattened, with a margin) reads as
-well as the exported file.
+and the modules are sampled at the cell centres. What is left wrong - a few
+modules at the rim - the Reed-Solomon decoder corrects, which is what it is
+for. A screenshot (flattened, with a margin) reads as well as the exported
+file.
+
+**The format block** is what a standard QR keeps in the metadata beside its
+first finder, and ours has the same thing. Fifteen cells in each eye's
+separator ring carry the version (4 bits), the mask (3 bits) and a checksum
+(8 bits). That ring is structure, so nothing can paint over it, and it sits
+out in the rim where the drawing never reaches. The reader uses it to know
+which mask it is looking at, so the code is read in one go rather than eight,
+and the checksum is what tells it that the fit is right. A code made before
+the block existed has nothing there, and falls back to trying the masks.
 
 ## Controls
 
@@ -244,12 +252,13 @@ style.css           theme
 favicon.svg         the tab icon: a tiny QR that only has to look like one
 app.js              editor, preview, badges, exports
 core.js             engine (DOM-free; node-requirable)
+assets/avatars/     the round profile pictures, as the app renders them
 lib/qrcode.js       qrcode-generator (MIT, Kazuhiko Arase), patched: make(forcedMask), QRRSBlock export
 lib/jsQR.js         jsQR (Apache-2.0), in-browser decoder for live verification
 test/verify.js      node suite: structural roundtrip + tolerance sweep
 test/pad.js         node suite: payload-freedom (linearity, solve, decode) + style decode battery
 test/canvas.js      node suite: writable-canvas sizing + zero-residual guarantee + decode battery
-test/pipeline.js    node suite: surfaces × versions, the custom backend, the round avatar
+test/pipeline.js    node suite: surfaces × versions, the custom backend, the round avatar, the reader
 test/styles.js      style lab: decode matrix across 7 module styles × sizes
 test/repro.js       visual check: art vs result sheet, ink-realized / contrast metrics
 test/catgen.js      cat preset workbench: builds the template, prints art vs result + metrics

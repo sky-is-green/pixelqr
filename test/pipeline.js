@@ -209,6 +209,31 @@ console.log('\n== reading codes back out of pictures ==');
   check('a standard QR reads back', got && got.kind === 'standard' && got.url === URL, String(got && got.url));
 }
 
+console.log('\n== the format block: the code says what it is ==');
+{
+  // the version and the mask are written into each eye's separator ring, so
+  // a reader knows where it is and what it is looking at
+  const pipe = P.PIPELINES.custom;
+  const lay = pipe.layout(URL, 6);
+  const art = P.artFromRows(reframe(P.TEMPLATE_ROWS.CAT, lay.G));
+  const w = pipe.fit(URL, 6, art, { style: 'dots' });
+  const base = pipe.build(URL, 6, w.fit.mask, null);
+  const fmt = P.readFormat(lay, base.modules);
+  check('the format block reads back the version and the mask',
+    fmt && fmt.version === 6 && fmt.mask === w.fit.mask,
+    JSON.stringify(fmt) + ' (the code used mask ' + w.fit.mask + ')');
+  // and it is outside the drawing, so nothing can paint over it
+  const shape = P.canvasShape(URL, 6, { surface: 'circle' });
+  const cells = P.formatCells(lay.finders[0].x, lay.finders[0].y);
+  const clear = cells.every(c => Math.sqrt((c.x - (lay.G - 1) / 2) ** 2 + (c.y - (lay.G - 1) / 2) ** 2) > shape.R);
+  check('the format block is out of the drawing area', clear, 'the surface is ' + shape.R.toFixed(1) + ' cells');
+  // and a reader uses it
+  const img = P.renderDiscRGBA(w.t.modules, lay.G, lay, 1024, 'dots');
+  const read = P.readImage(img.data, img.width, img.height);
+  check('the reader uses the format block', read && read.format === true,
+    read ? ('mask ' + read.mask + ', format ' + read.format) : 'nothing read');
+}
+
 console.log('\n== the custom avatar fills the circle ==');{
   const v = 6;
   const pipe = P.PIPELINES.custom;
