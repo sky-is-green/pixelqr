@@ -65,9 +65,10 @@ node test/pipeline.js
 - **Red dots** mark drawn ink the budget couldn't realize: switch to a higher
   version (bigger surface) or erase that bit.
 - **A roomy editor and a zoom.** The drawing grid gets the wider column and
-  most of the page, and the zoom (1× to 4×, or ctrl+wheel) makes the cells
+  most of the page, and the zoom (½× to 4×, or ctrl+wheel) makes the cells
   bigger for fine detail, redrawn at the new size rather than scaled, so it
-  stays crisp, and the view keeps the same cell in the middle.
+  stays crisp, and the view keeps the same cell in the middle. Half is the
+  overview: the whole grid at once.
 - **Undo** (Ctrl/Cmd+Z or the button) steps back through edits.
 - **Live verification**: after every edit the code is decoded in-browser with a
   real QR decoder (jsQR), both crisp and shrunk+blurred (simulating scanning at
@@ -176,13 +177,13 @@ and changes one thing: **the layout**.
 |---|---|
 | Generation: standard / custom | The ordinary QR, or my own circular layout |
 | Brush: ink / erase | Paint a module dark, or back to light (right-click erases too) |
-| Surface: square / circle / cross | The shape of the free area (the cross is thin: it needs a big version) |
+| Surface: square / circle / cross | The shape of the free area (a cross is thin — only v12 has room to draw in it) |
 | Style: square / dots / squircle / hexagon / leaf / diamond | How the final code is rendered: every style is decode-verified as rendered (crisp, blurred, downscaled) |
 | Presets: cat / smiley / heart | Load a module-resolution template |
 | Upload image | Downsample any image to the grid (dark/light threshold) |
 | Clear | Wipe every drawing: the surface goes back to blank (undo brings it back) |
 | Undo | Ctrl/Cmd+Z or the button: steps back through edits |
-| Zoom: − / 1× / + | Bigger cells for finer detail (also ctrl+wheel). The grid is redrawn at the new cell size, so it stays crisp, and the frame scrolls when it outgrows the panel: the same cell stays in the middle |
+| Zoom: − / 1× / + | ½× to 4× (also ctrl+wheel). Bigger cells for finer detail; ½× is the overview. The grid is redrawn at the new cell size, so it stays crisp, and the frame scrolls when it outgrows the panel: the same cell stays in the middle |
 | Link to → | The URL the QR encodes |
 | Version | v3–v13 = 29–69 modules; each shows the surface it would give this link, and the ones that cannot hold the link are greyed out (auto-fit: loading a preset bumps the version until it fits). Switching reframes your art (centred, no distortion) |
 | Mask | auto / 0–7 / shuffle: auto runs the pattern-fit search (may add a `#x` anchor fragment to the link); a fixed mask keeps your exact link |
@@ -303,8 +304,8 @@ test/catgen.js      cat preset workbench: builds the template, prints art vs res
 - The surface is sized by physics, not preference: a bigger surface needs a
   bigger error budget. For a 22-char link that means ~13×13 cells at v3,
   ~17×17 at v4, ~19×19 at v5, ~23×23 at v6, ~35×35 at v10. Shorter links grow
-  the surface (more free pad bits). A cross is thin, and needs a big version
-  before it has room to draw in.
+  the surface (more free pad bits). A cross is thinner still: only v12 gives
+  its arms room to draw in, so that is the only version it is offered with.
 - The custom backend is **not a standard QR**. It is a QR-shaped code with my
   own layout: a phone camera will not read it. Use it when the shape matters
   more than the compatibility.

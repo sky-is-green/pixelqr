@@ -16,15 +16,23 @@
   var P = window.PixelQR;
   var BASE_CELL = 16;     // editor cell size at 1x (px)
   var PREVIEW_BOX = 12;   // preview module size (px)
-  var ZOOMS = [1, 2, 3, 4];
+  var ZOOMS = [0.5, 1, 2, 3, 4];   // half is the overview: the whole grid at once
 
   // The versions on offer, per generation. The standard one keeps to the
   // versions that have no alignment pattern in the drawing area (v3 to v6),
-  // plus v12 — the one that buys the biggest surface for a big drawing. The
+  // plus v12 — the one that buys the biggest surface for a big drawing. A
+  // cross is thinner still: its arms only have room to draw in at v12. The
   // custom layout has no alignment patterns at all, so every version is fair
   // game there.
   var STANDARD_VERSIONS = [3, 4, 5, 6, 12];
+  var CROSS_VERSIONS = [12];
   var CUSTOM_VERSIONS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+
+  function versionsFor(pipeline, surface) {
+    if (pipeline === 'custom') return CUSTOM_VERSIONS;
+    if (surface === 'cross') return CROSS_VERSIONS;
+    return STANDARD_VERSIONS;
+  }
 
   var state = {
     pipeline: 'standard',                    // standard | custom
@@ -51,6 +59,14 @@
 
   /** The editor's cell size: the base cell, scaled by the zoom. */
   function cell() { return BASE_CELL * state.zoom; }
+
+  /** The zoom readout, and the buttons' ends. */
+  function zoomLabel() {
+    var z = state.zoom;
+    $('#zoom-level').textContent = (z === 0.5 ? '½' : String(z)) + '×';
+    $('#zoom-out').disabled = z <= ZOOMS[0];
+    $('#zoom-in').disabled = z >= ZOOMS[ZOOMS.length - 1];
+  }
 
   /** The editor grid: a square for the standard pipeline, a disc's box for mine. */
   function n() {
@@ -128,7 +144,7 @@
    */
   function buildVersionList() {
     var sel = $('#version');
-    var list = state.pipeline === 'custom' ? CUSTOM_VERSIONS : STANDARD_VERSIONS;
+    var list = versionsFor(state.pipeline, state.surface);
     sel.innerHTML = '';
     list.forEach(function (v) {
       var opt = document.createElement('option');
@@ -190,7 +206,8 @@
         '(the custom mode has none).');
     }
     if (state.surface === 'cross') {
-      bits.push('A cross is thin: it needs a big version before there is room to draw.');
+      bits.push('A cross is thin — its arms only have room to draw in at v12, ' +
+        'so that is the only version on offer.');
     }
     hint.textContent = bits.join(' ');
   }
@@ -718,7 +735,7 @@
         pipeline: state.pipeline
       });
       if (state.version < min) {
-        var list = state.pipeline === 'custom' ? CUSTOM_VERSIONS : STANDARD_VERSIONS;
+        var list = versionsFor(state.pipeline, state.surface);
         var pick = null;
         list.forEach(function (v) { if (v >= min && (pick === null || v < pick)) pick = v; });
         if (pick === null) pick = list[list.length - 1];
@@ -752,7 +769,7 @@
     // outgrows the panel — keeping the same cell in the middle, so zooming
     // in does not throw away what you were looking at.
     function setZoom(z) {
-      var next = Math.min(Math.max(1, z), ZOOMS[ZOOMS.length - 1]);
+      var next = Math.min(Math.max(ZOOMS[0], z), ZOOMS[ZOOMS.length - 1]);
       if (next === state.zoom) return;
       var frame = $('.editor-frame');
       var canvas = $('#editor');
@@ -768,9 +785,7 @@
         }
       }
       state.zoom = next;
-      $('#zoom-level').textContent = state.zoom + '×';
-      $('#zoom-out').disabled = state.zoom === ZOOMS[0];
-      $('#zoom-in').disabled = state.zoom === ZOOMS[ZOOMS.length - 1];
+      zoomLabel();
       drawEditor();
       if (before && frame && canvas) {
         var fr2 = frame.getBoundingClientRect();
@@ -780,13 +795,19 @@
       }
     }
 
-    $('#zoom-in').addEventListener('click', function () { setZoom(state.zoom + 1); });
-    $('#zoom-out').addEventListener('click', function () { setZoom(state.zoom - 1); });
+    function stepZoom(dir) {
+      var i = ZOOMS.indexOf(state.zoom);
+      if (i < 0) i = 1;
+      setZoom(ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, i + dir))]);
+    }
+
+    $('#zoom-in').addEventListener('click', function () { stepZoom(1); });
+    $('#zoom-out').addEventListener('click', function () { stepZoom(-1); });
     // ctrl+wheel zooms too, for a mouse that is already there
     $('#editor').addEventListener('wheel', function (e) {
       if (!e.ctrlKey) return;
       e.preventDefault();
-      setZoom(state.zoom + (e.deltaY < 0 ? 1 : -1));
+      stepZoom(e.deltaY < 0 ? 1 : -1);
     }, { passive: false });
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-brush]'), function (btn) {
@@ -831,8 +852,10 @@
         Array.prototype.forEach.call(document.querySelectorAll('[data-surface]'), function (b) {
           b.classList.toggle('active', b === btn);
         });
+        buildVersionList();
         updateVersionLabels();
         updateHint();
+        state.artRows = reframeRows(state.artRows, n());
         refresh(true);
       });
     });
@@ -953,9 +976,7 @@
       badge.textContent = '… working';
       var preview = $('#preview');
       preview.width = preview.height = (n() + 8) * PREVIEW_BOX;
-      $('#zoom-level').textContent = state.zoom + '×';
-      $('#zoom-out').disabled = state.zoom === ZOOMS[0];
-      $('#zoom-in').disabled = state.zoom === ZOOMS[ZOOMS.length - 1];
+      zoomLabel();
     } catch (e) { /* keep going: the fit is what matters */ }
     setTimeout(function () { refresh(true); }, 0);
   }

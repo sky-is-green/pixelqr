@@ -23,7 +23,7 @@ html, body {
   line-height: 1.5;
 }
 
-.wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
 
 /* ---------- header ---------- */
 .top { padding: 34px 0 10px; }
@@ -40,7 +40,7 @@ html, body {
 /* ---------- layout ---------- */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  grid-template-columns: minmax(0, 8fr) minmax(0, 5fr);
   gap: 24px;
   padding-top: 24px;
   padding-bottom: 24px;
@@ -88,7 +88,7 @@ html, body {
   display: flex;
   justify-content: center;
 }
-.editor-frame { overflow: auto; max-height: 76vh; justify-content: flex-start; }
+.editor-frame { overflow: auto; max-height: 82vh; justify-content: flex-start; }
 #editor { cursor: crosshair; touch-action: none; max-width: none; height: auto; image-rendering: pixelated; margin: auto; }
 .preview-frame { background: #fff; }
 #preview { max-width: 100%; height: auto; image-rendering: pixelated; }
@@ -224,20 +224,20 @@ html.crt .tagline { display: none; }       /* the frame already carries the line
 html.crt .wrap { max-width: none; padding: 0 12px; }
 /* Editor and preview stay side by side: this app is framed at ~500px wide, so
    the usual 880px collapse would stack them and make the frame scroll. It only
-   stacks when the frame itself is genuinely too narrow for two columns. */
+   stacks when the frame itself is genuinely too narrow for two columns. The
+   drawing takes the wider column — it is the thing you work in. */
 html.crt .layout {
   padding: 10px 0 12px; gap: 12px;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  grid-template-columns: minmax(0, 8fr) minmax(0, 5fr);
 }
 @media (max-width: 400px) { html.crt .layout { grid-template-columns: 1fr; } }
 html.crt .panel { padding: 10px; }
 html.crt .panel-head { margin-bottom: 8px; }
 html.crt .canvas-frame { margin-bottom: 10px; }
-/* The canvases are sized in JS to their backing store (a cell grid), so they
-   have an intrinsic pixel width that becomes the panel's min width — which is
-   what pushed a horizontal scrollbar into the frame. They scale instead, and
-   cellFromEvent() is already scale-aware. */
-html.crt .canvas-frame canvas { max-width: 100%; height: auto; }
+/* The preview scales to its panel; the editor does not — it is drawn at its
+   own cell size so the zoom stays crisp, and the frame scrolls when the grid
+   outgrows it. */
+html.crt .preview-frame canvas { max-width: 100%; height: auto; }
 html.crt .panel, html.crt .layout, html.crt .panel-head { min-width: 0; }
 html.crt .tools { margin-top: 10px; gap: 9px 16px; }
 html.crt .settings { margin-top: 10px; }
