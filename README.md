@@ -7,8 +7,8 @@ Live at: https://sky-is-green.github.io/pixelqr/
 
 <img width="250" height="250" alt="The custom layout: a round QR, full-bleed, the eyes 120 degrees apart" src="assets/avatars/avatar_custom_heart.png" />
 <img width="250" height="250" alt="The standard layout: an ordinary QR, which any phone camera reads" src="assets/avatars/avatar_standard.png" />
-<img width="250" height="250" alt="The custom layout with the cat" src="assets/avatars/avatar_custom.png" />
-<img width="250" height="250" alt="The round profile picture: the QR inscribed in the circle, so all three eyes survive the crop" src="assets/avatars/avatar_round.png" />
+<img width="250" height="250" alt="1024_cut" src="https://github.com/user-attachments/assets/029abf68-104e-4682-8d09-8cc5cba93b8f" />
+
 
 
 No server, no build step, no CDN: everything runs in the browser, works from
