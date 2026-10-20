@@ -219,6 +219,7 @@ than like a broken page.
 ```
 index.html          UI markup
 style.css           theme
+favicon.svg         the tab icon: a tiny QR that only has to look like one
 app.js              editor, preview, badges, exports
 core.js             engine (DOM-free; node-requirable)
 lib/qrcode.js       qrcode-generator (MIT, Kazuhiko Arase), patched: make(forcedMask), QRRSBlock export
