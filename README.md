@@ -76,9 +76,9 @@ node test/pipeline.js
   overview: the whole grid at once.
 - **Read it back.** "Open code" reads a picture: a standard QR with jsQR, and one
   of ours with the engine's own decoder. Ours is not a standard QR, so a phone
-  camera cannot read it — the app is the reader. The picture's shape gives the
-  grid, the eyes say when the fit is right, and the Reed-Solomon decoder sorts
-  out the rest.
+  camera cannot read it — the app is the reader, and so is `reader.js`, which
+  stands on its own. The picture's shape gives the grid, the eyes say when the
+  fit is right, and the Reed-Solomon decoder sorts out the rest.
 - **Undo** (Ctrl/Cmd+Z or the button) steps back through edits.
 - **Live verification**: after every edit the code is decoded in-browser with a
   real QR decoder (jsQR), both crisp and shrunk+blurred (simulating scanning at
@@ -199,6 +199,46 @@ which mask it is looking at, so the code is read in one go rather than eight,
 and the checksum is what tells it that the fit is right. A code made before
 the block existed has nothing there, and falls back to trying the masks.
 
+## The reader, on its own
+
+`reader.js` is a thing in its own right. It reads our custom codes out of a
+picture, and it **needs nothing but itself** — no encoder, no library, no
+server. Someone who only wants to read these codes takes that one file.
+
+In a page:
+
+```html
+<script src="reader.js"></script>
+<script>
+  // the pixels are RGBA, four bytes each
+  const got = PixelQRReader.readImage(pixels, width, height);
+  if (got) console.log(got.url, got.version, got.mask);
+</script>
+```
+
+In node:
+
+```js
+const reader = require('./reader.js');
+const got = reader.readImage(pixels, width, height);
+```
+
+It reads our custom codes, and — if you hand it a decoder — standard ones
+too. The engine passes its own jsQR; the reader does not need one for our
+codes. `readImage` gives back `{ url, kind, version, mask, format }`, where
+`kind` is `custom` or `standard`, and `format` says whether the code's own
+format block was found and used.
+
+The file also **defines the format** — the layout, the masks, the
+Reed-Solomon decoder — so the generator builds to the same spec and the two
+cannot drift. The reader's block table (the Reed-Solomon structure per
+version) is the spec's numbers at error-correction level H, which is how it
+can stand alone instead of borrowing the encoder's.
+
+`test/reader.js` proves the independence: it builds codes with the generator
+and reads them back with the reader alone, from the rendered picture and from
+a screenshot of it.
+
 ## Controls
 
 | Control | What it does |
@@ -250,6 +290,8 @@ index.html          UI markup
 style.css           theme
 favicon.svg         the tab icon: a tiny QR that only has to look like one
 app.js              editor, preview, badges, exports
+reader.js           the reader: reads our custom codes out of a picture, and
+                    defines the format they use (it needs nothing else)
 core.js             engine (DOM-free; node-requirable)
 assets/avatars/     the round profile pictures, as the app renders them
 lib/qrcode.js       qrcode-generator (MIT, Kazuhiko Arase), patched: make(forcedMask), QRRSBlock export
